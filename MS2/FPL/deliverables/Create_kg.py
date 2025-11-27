@@ -250,16 +250,4 @@ create_away_team_relation(conn,df)
 create_plays_as_relation(conn,df)
 create_played_in_relation(conn,df)
 
-query1 = """
-
-""" 
-
-result = conn.execute_query(query1)
-print(result[0]['gameweeks'])
-
-query2 = """
-
-"""
-result = conn.execute_query(query2)
-print(result[0]['players'])
 
