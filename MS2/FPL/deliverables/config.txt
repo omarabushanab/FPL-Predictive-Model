@@ -1,0 +1,3 @@
+uri = "neo4j+ssc://b0d23506.databases.neo4j.io"
+user = "neo4j"
+password = "yA219NUjGwZeHjL7lQgGUHfzSJsQtneBlXqGByjik8c"

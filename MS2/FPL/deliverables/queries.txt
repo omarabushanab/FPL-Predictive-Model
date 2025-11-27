@@ -1,0 +1,35 @@
+//1. Query 1
+
+MATCH (g:Gameweek)
+RETURN count(g) as gameweeks
+
+//2. Query 2
+
+MATCH (p:Player)
+RETURN count(p) as players
+
+//3. Query 3
+
+MATCH (s1:Season {season_name: '2021-22'})-[:HAS_GW]->(:Gameweek)-[:HAS_FIXTURE]->(f:Fixture)-[:HAS_HOME_TEAM|HAS_AWAY_TEAM]->(t:Team)
+WITH collect(DISTINCT t.name) as teams_2021_22
+
+MATCH (s2:Season {season_name: '2022-23'})-[:HAS_GW]->(:Gameweek)-[:HAS_FIXTURE]->(f:Fixture)-[:HAS_HOME_TEAM|HAS_AWAY_TEAM]->(t:Team)
+WITH teams_2021_22, collect(DISTINCT t.name) as teams_2022_23
+
+RETURN [team IN teams_2021_22 WHERE NOT team IN teams_2022_23] as qualified_only_in_2021_22
+
+//4. Query 4
+
+MATCH (s:Season {season_name: '2022-23'})-[:HAS_GW]->(gw:Gameweek)-[:HAS_FIXTURE]->(f:Fixture)
+MATCH (p:Player)-[played:PLAYED_IN]->(f)
+RETURN p.player_name as player_name, played.total_points as points, gw.GW_number as gameweek
+ORDER BY played.total_points DESC
+LIMIT 1
+
+//5. Query 5
+
+MATCH (p:Player)
+WHERE toLower(p.player_name) CONTAINS 'elneny'
+MATCH (p)-[played:PLAYED_IN]->(f:Fixture)
+WHERE played.minutes > 0
+RETURN count(played) as total_matches_played
