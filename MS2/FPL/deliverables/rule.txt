@@ -1,90 +1,61 @@
-query_scoring = """
-// rule.txt - Complete scoring rule implementation
-MATCH (p:Player)-[:PLAYS_AS]->(pos:Position)
-WITH p, collect(pos.name) as positions
+// Players with two positions (one is DEF) -> find fixtures where recorded total_points
+// don't match what they'd score if they were a defender (i.e. likely mistaken DEF assignments).
+// Uses scoring rules from the Milestone PDF. :contentReference[oaicite:1]{index=1}
+
+MATCH (p:Player)-[:PLAYS_AS]->(pos)
+WITH p, collect(pos.name) AS positions
 WHERE size(positions) > 1 AND 'DEF' IN positions
 
-WITH p, positions
-MATCH (p)-[played:PLAYED_IN]->(f:Fixture)
-MATCH (f)<-[:HAS_FIXTURE]-(gw:Gameweek)-[:HAS_GW]-(s:Season)
+// get all fixtures this player played in
+MATCH (p)-[r:PLAYED_IN]->(f:Fixture)
+WITH p, r, f,
 
-// Calculate what the score SHOULD have been if player was defender
-WITH p, positions, played, f, s, gw,
-     // General scoring rules
-     played.assists * 3 +
-     CASE 
-         WHEN played.minutes < 60 THEN 1
-         WHEN played.minutes >= 60 THEN 2
-         ELSE 0 
-     END +
-     COALESCE(played.penalties_missed, 0) * -2 +
-     COALESCE(played.own_goals, 0) * -2 +
-     COALESCE(played.yellow_cards, 0) * -1 +
-     COALESCE(played.red_cards, 0) * -3 +
-     
-     // Defender-specific scoring
-     COALESCE(played.goals_scored, 0) * 6 +
-     CASE 
-         WHEN played.minutes > 60 AND COALESCE(played.clean_sheets, 0) = 1 THEN 4
-         ELSE 0 
-     END +
-     FLOOR(COALESCE(played.goals_conceded, 0) / 2.0) * -1 +
-     // Penalty saves and saves don't apply to defenders (0 points)
-     0 as def_score,
+  // components according to rules in the PDF:
+  // goals by DEF = 6 pts each, assists = 3, play time: <60 -> 1, >=60 -> 2
+  // clean sheet for DEF: +4 only if minutes > 60 and clean_sheets flag
+  // goals conceded: -1 for every 2 conceded
+  // penalty miss -2, own goal -2, yellow -1, red -3
+  (r.goals_scored * 6)                                  AS goals_pts,
+  (r.assists * 3)                                       AS assists_pts,
+  CASE WHEN r.minutes >= 60 THEN 2
+       WHEN r.minutes > 0  THEN 1
+       ELSE 0 END                                         AS playtime_pts,
+  CASE WHEN r.minutes > 60 AND coalesce(r.clean_sheets,0) >= 1 THEN 4 ELSE 0 END AS cs_pts,
+  (toInteger(coalesce(r.goals_conceded,0) / 2) * -1)    AS gc_pts,
+  (coalesce(r.penalties_missed,0) * -2)                 AS pm_pts,
+  (coalesce(r.own_goals,0) * -2)                        AS og_pts,
+  (coalesce(r.yellow_cards,0) * -1)                     AS yc_pts,
+  (coalesce(r.red_cards,0) * -3)                        AS rc_pts,
+  r.total_points                                        AS recorded_points
 
-     // Store fixture details
-     s.season_name as season,
-     f.fixture_number as fixture_number,
-     played.total_points as total_points
+// compute defender expected score for this fixture
+WITH p, f, r,
+     (goals_pts + assists_pts + playtime_pts + cs_pts + gc_pts + pm_pts + og_pts + yc_pts + rc_pts)
+     AS def_score, recorded_points
 
-// Check if defender score matches actual points (with small tolerance for floating point)
-WITH p, 
-     size([played IN [(p)-[played:PLAYED_IN]->(f) | played] WHERE played.minutes > 0]) as total_fixtures,
+// mark whether defender-score equals recorded points
+WITH p, f, r, def_score, recorded_points, (def_score = recorded_points) AS matches_def
+
+// keep only fixtures that DO NOT match defender scoring (i.e. likely incorrect defender assignment)
+WHERE NOT matches_def
+
+// aggregate per player: number of incorrect fixtures and details
+WITH p,
+     count(*) AS not_def_fixtures,
      collect({
-         def_score: def_score,
-         season: season,
-         fixture_number: fixture_number,
-         matches_def: abs(def_score - total_points) < 0.1, // Small tolerance for comparison
-         total_points: total_points
-     }) as all_fixtures
+       def_score: toFloat(def_score),
+       season: f.season,
+       fixture_number: f.fixture_number,
+       matches_def: matches_def,
+       total_points: recorded_points
+     }) AS fixture_details
 
-// Filter only fixtures where defender score doesn't match actual points
-WITH p, 
-     total_fixtures,
-     [fixture IN all_fixtures WHERE NOT fixture.matches_def] as incorrect_fixtures
+// find total fixtures the player played (to return total_fixtures)
+MATCH (p)-[r2:PLAYED_IN]->(f2:Fixture)
+WITH p, not_def_fixtures, fixture_details, count(r2) AS total_fixtures
 
-WHERE size(incorrect_fixtures) > 0
-RETURN p.player_name as player,
-       size(incorrect_fixtures) as not_def_fixtures,
+RETURN p.player_name AS player,
+       not_def_fixtures,
        total_fixtures,
-       incorrect_fixtures as fixture_details
-ORDER BY not_def_fixtures DESC
-"""
-
-result = conn.execute_query(query_scoring)
-
-# Format the output exactly as specified
-print("player\tnot_def_fixtures\ttotal_fixtures\tfixture_details")
-print("-" * 80)
-
-for record in result:
-    player = record['player']
-    not_def_fixtures = record['not_def_fixtures']
-    total_fixtures = record['total_fixtures']
-    fixture_details = record['fixture_details']
-    
-    # Print in the exact format with proper spacing
-    print(f'"{player}"\t{not_def_fixtures}\t{total_fixtures}')
-    print("[")
-    
-    for i, fixture in enumerate(fixture_details):
-        print("  {")
-        print(f'    "def_score": {fixture["def_score"]},')
-        print(f'    "season": "{fixture["season"]}",')
-        print(f'    "fixture_number": {fixture["fixture_number"]},')
-        print(f'    "matches_def": {str(fixture["matches_def"]).lower()},')
-        print(f'    "total_points": {fixture["total_points"]}')
-        print("  }" + ("," if i < len(fixture_details) - 1 else ""))
-    
-    print("]")
-    print()  # Add space between players
+       fixture_details
+ORDER BY not_def_fixtures DESC, player;

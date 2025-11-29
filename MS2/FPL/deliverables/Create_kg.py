@@ -222,15 +222,19 @@ def create_played_in_relation(conn, df, batch_size=2000):
                'penalties_saved', 'penalties_missed', 'yellow_cards',
                'red_cards', 'saves', 'bps', 'influence', 'creativity',
                'threat', 'ict_index', 'form']]
-
+    
     rel = data.to_dict('records')
+
+    for r in rel:
+        r["props"] = {k: v for k, v in r.items()
+                      if k not in ["name", "element", "season", "fixture"]}
 
     query = """
     UNWIND $batch AS rel
     MATCH (p:Player {player_name: rel.name, player_element: rel.element})
     MATCH (f:Fixture {season: rel.season, fixture_number: rel.fixture})
     MERGE (p)-[r:PLAYED_IN]->(f)
-    SET r += rel
+    SET r += rel.props
     """
 
     total = 0

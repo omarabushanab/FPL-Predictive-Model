@@ -22,9 +22,10 @@ RETURN [team IN teams_2021_22 WHERE NOT team IN teams_2022_23] as qualified_only
 
 MATCH (s:Season {season_name: '2022-23'})-[:HAS_GW]->(gw:Gameweek)-[:HAS_FIXTURE]->(f:Fixture)
 MATCH (p:Player)-[played:PLAYED_IN]->(f)
-RETURN p.player_name as player_name, played.total_points as points, gw.GW_number as gameweek
+RETURN p.player_name as player_name, played.total_points as points
 ORDER BY played.total_points DESC
 LIMIT 1
+
 
 //5. Query 5
 

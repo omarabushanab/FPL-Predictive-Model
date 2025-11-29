@@ -1,0 +1,44 @@
+//get all players with multiple positions
+
+MATCH (p:Player) - [:PLAYS_AS] -> (pos:Position)
+
+WITH p, collect(pos.name) as positions
+WHERE size(positions) > 1 AND 'DEF' IN positions
+
+MATCH (p) - [r:PLAYED_IN]->(fix)
+
+WITH p, r, fix,
+//general
+r.assists * 3 AS assists_pts,
+CASE 
+    WHEN r.minutes > 60 THEN 2
+    WHEN r.minutes > 0 THEN 1
+    ELSE 0 
+END AS playtime_pts,
+r.penalties_missed * -2 AS pnlt_miss_pts,
+r.own_goals * -2 AS og_pts,
+r.yellow_cards * -1 AS ylw_pts,
+r.red_cards * -3 AS red_pts,
+r.goals_scored * 6 AS goals_pts,
+CASE 
+    WHEN r.minutes > 60 THEN r.clean_sheets * 4
+    ELSE 0
+END AS clean_sheets_pts,
+floor(r.goals_conceded/2) *-1 AS goals_conceded_pts,
+
+WITH p,r,fix,assists_pts, pnlt_miss_pts, og_pts, ylw_pts, red_pts, goals_pts,
+clean_sheets_pts, goals_conceded_pts,
+
+(assists_pts + playtime_pts + pnlt_miss_pts + og_pts + ylw_pts + red_pts + goals_pts + clean_sheets_pts + goals_conceded_pts) AS def_pts,
+r.total_points as total_pts
+
+
+
+
+
+
+
+
+
+
+
