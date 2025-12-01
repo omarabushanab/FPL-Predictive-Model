@@ -1,0 +1,56 @@
+MATCH (p:Player)-[:PLAYS_AS]->(pos)
+WITH p, collect(pos.name) AS positions
+WHERE size(positions) > 1   // players with more than 1 position
+
+MATCH (p)-[r:PLAYED_IN]->(f:Fixture)
+WITH p, r, f,
+  (r.goals_scored * 6)                      AS goals_pts,
+  (r.assists * 3)                           AS assists_pts,
+  CASE WHEN r.minutes >= 60 THEN 2
+       WHEN r.minutes > 0  THEN 1
+       ELSE 0 END                           AS playtime_pts,
+  CASE 
+        WHEN r.minutes > 60 AND r.clean_sheets >= 1 THEN 4
+        ELSE 0 END                          AS cs_pts,
+  (floor(r.goals_conceded / 2) * -1)        AS gc_pts,
+  (r.penalties_missed * -2)                 AS pm_pts,
+  (r.own_goals * -2)                        AS og_pts,
+  (r.yellow_cards * -1)                     AS yc_pts,
+  (r.red_cards * -3)                        AS rc_pts,
+  r.bonus                                   AS bonus,
+  r.total_points                            AS recorded_points
+
+// compute defender-style score
+WITH p, f, r,
+     (goals_pts + assists_pts + playtime_pts + cs_pts + gc_pts + pm_pts + og_pts + yc_pts + rc_pts + bonus)
+     AS def_score,
+     recorded_points
+
+WITH p, f, r, def_score, recorded_points,
+     (def_score = recorded_points) AS matches_def
+
+// aggregate with two different collectors:
+// - total fixtures: count(*)
+// - details: only mismatching fixtures
+WITH p,
+     sum(CASE WHEN matches_def = false THEN 1 ELSE 0 END) AS not_def_fixtures,
+     collect(
+       CASE WHEN matches_def = false THEN {
+         def_score: toFloat(def_score),
+         season: f.season,
+         fixture_number: f.fixture_number,
+         matches_def: matches_def,
+         total_points: recorded_points
+       } END
+     ) AS raw_details,
+     count(*) AS total_fixtures
+
+// clean NULL entries
+WITH p, not_def_fixtures, total_fixtures,
+     [d IN raw_details WHERE d IS NOT NULL] AS fixture_details
+
+RETURN p.player_name AS player,
+       not_def_fixtures,
+       total_fixtures,
+       fixture_details
+ORDER BY not_def_fixtures DESC, player;
