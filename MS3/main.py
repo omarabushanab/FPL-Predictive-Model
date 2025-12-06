@@ -1,13 +1,13 @@
 import streamlit as st
 from google import genai
 from mistralai import Mistral
+import cohere
 import json
 import os
 from dotenv import load_dotenv
 
 # Load the environment variables from the .env file
-load_dotenv() 
-
+load_dotenv()
 # ---------------------------
 # CONFIG
 # ---------------------------
@@ -17,7 +17,10 @@ API_GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 MISTRAL_MODEL = os.getenv("MISTRAL_MODEL")
 API_MISTRAL_KEY = os.getenv("MISTRAL_API_KEY")
 
-st.title("⚽ FPL Graph-RAG Assistant (Gemini + Mistral)")
+COHERE_MODEL = os.getenv("COHERE_MODEL")
+API_COHERE_KEY = os.getenv("COHERE_API_KEY")
+
+st.title("⚽ FPL Graph-RAG Assistant (Gemini + Mistral + Cohere)")
 
 
 # ---------------------------
@@ -82,7 +85,6 @@ Answer:
     return prompt
 
 
-
 # ---------------------------
 # INIT CLIENTS
 # ---------------------------
@@ -94,6 +96,10 @@ if "gemini_client" not in st.session_state:
 if "mistral_client" not in st.session_state:
     st.session_state.mistral_client = Mistral(api_key=API_MISTRAL_KEY)
 
+# Cohere client
+if "cohere_client" not in st.session_state:
+    st.session_state.cohere_client = cohere.Client(API_COHERE_KEY)
+
 # Unified message history
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -102,7 +108,10 @@ if "messages" not in st.session_state:
 # ---------------------------
 # UI MODEL DROPDOWN
 # ---------------------------
-model_choice = st.selectbox("Choose Model", ["Gemini 2.5 Flash", "Mistral Small"])
+model_choice = st.selectbox(
+    "Choose Model",
+    ["Gemini 2.5 Flash", "Mistral Small", "Cohere"]
+)
 
 
 # ---------------------------
@@ -129,9 +138,7 @@ if query:
     context = build_context(dummy_baseline, dummy_embeddings)
     structured_prompt = build_prompt(query, context)
 
-    # ---------------------------
-    # GEMINI LLM
-    # ---------------------------
+    # GEMINI
     if model_choice == "Gemini 2.5 Flash":
         with st.chat_message("assistant"):
             with st.spinner("Gemini Thinking..."):
@@ -142,10 +149,8 @@ if query:
                 answer = response.text
             st.write(answer)
 
-    # ---------------------------
-    # MISTRAL LLM
-    # ---------------------------
-    else:
+    # MISTRAL
+    elif model_choice == "Mistral Small":
         with st.chat_message("assistant"):
             with st.spinner("Mistral Thinking..."):
                 try:
@@ -160,5 +165,21 @@ if query:
 
             st.write(answer)
 
-    # store assistant message
+    # COHERE
+    else:
+        with st.chat_message("assistant"):
+            with st.spinner("Cohere Thinking..."):
+                try:
+                    response = st.session_state.cohere_client.chat(
+                        model=COHERE_MODEL,
+                        message=structured_prompt,
+                        max_tokens=200
+                    )
+                    answer = response.text
+                except Exception as e:
+                    answer = f"Error with Cohere API: {e}"
+
+            st.write(answer)
+
+    # Save assistant response
     st.session_state.messages.append({"role": "assistant", "content": answer})
