@@ -16,9 +16,9 @@ def read_config(path):
 
 config = read_config("config.txt")
 
-uri = config["uri"]
-user = config["user"]
-password = config["password"]
+uri = config["URI"]
+user = config["USERNAME"]
+password = config["PASSWORD"]
 
 
 
