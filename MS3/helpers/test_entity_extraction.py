@@ -1,6 +1,7 @@
-import re
+import sys, os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from neo4j_connection import Neo4jConnection 
-from entity_extraction import FPLEncoderNER 
+from preprocessing import FPLEncoderNER 
 from config_reader import read_config 
 
 config = read_config("config.txt") 
