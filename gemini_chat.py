@@ -1,16 +1,19 @@
 import streamlit as st
 from google import genai
 import os
+from dotenv import load_dotenv
 
+# Load the environment variables from the .env file
+load_dotenv() 
 # --- Configuration ---
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = os.getenv("GEMINI_MODEL")
 st.title("💬 Gemini Chat App")
 
 # 1. Initialize the Client and API Key securely
 # We'll use st.secrets.toml for best practice, but for a quick fix,
 # we'll store the API key in a constant or environment variable.
 # NOTE: It's best practice to use os.getenv("GEMINI_API_KEY")
-API_GEMINI_KEY = "AIzaSyCpgHX9YRGSbUL4q9T39OIXXMy2yBsfOPU"
+API_GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 
 # Store the Client and Chat Session in st.session_state
 if "client" not in st.session_state:
