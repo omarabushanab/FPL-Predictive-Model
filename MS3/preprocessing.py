@@ -1,4 +1,5 @@
 from sentence_transformers import SentenceTransformer
+import re
 
 
 INTENT_KEYWORDS = {
@@ -34,7 +35,6 @@ User Query: "{}"
 Answer with ONLY the label.
 """
 
-import re
 #  b. Entity Extractions 
 class FPLEncoderNER:
     """
