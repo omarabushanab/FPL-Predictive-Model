@@ -103,68 +103,125 @@ class FPLEncoderNER:
         q = query.lower()
 
         entities = {
-            "players": [],
-            "team": None,
-            "position": None,
-            "season": None,
-            "gameweek": None,
-            "stat": None
+            "players": [],      # array
+            "teams": [],        # array
+            "positions": [],    # array
+            "season": [],       # array
+            "gameweek": [],     # array
+            "stat": []          # array
         }
 
-        # 1. Player names
+        # Get all words from query (for whole-word matching)
+        query_words = set(q.split())
+        
+        # Common words to avoid matching as player names
+        common_words = {
+            'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+            'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+            'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should',
+            'could', 'can', 'may', 'might', 'must', 'shall', 'season', 'gameweek',
+            'gw', 'this', 'last', 'next', 'compare', 'show', 'me', 'who', 'what',
+            'when', 'where', 'why', 'how', 'best', 'top', 'most', 'least'
+        }
+        
+        # 1. Player names - WHOLE WORD MATCHING ONLY
         for p in self.PLAYERS:
-            if p.lower() in q:
-                entities["players"].append(p)
-
+            if not p:
+                continue
+                
+            player_lower = p.lower()
+            player_words = player_lower.split()
+            
+            # Skip very short player names to avoid false positives
+            if len(player_words) == 1 and len(player_words[0]) < 4:
+                continue
+                
+            # Strategy 1: Check if ALL words in player name are in query as whole words
+            # (for full name matches like "Erling Haaland")
+            all_words_match = all(
+                word in query_words and word not in common_words 
+                for word in player_words
+            )
+            
+            if all_words_match:
+                if p not in entities["players"]:
+                    entities["players"].append(p)
+                continue  # Skip to next player if full name matched
+                
+            # Strategy 2: Last name only (but avoid common words)
+            if len(player_words) > 1:
+                last_name = player_words[-1]
+                # Only match if last name is a whole word in query AND not a common word
+                if (last_name in query_words and 
+                    len(last_name) > 3 and  # Avoid short names
+                    last_name not in common_words and
+                    not last_name.endswith('son') and  # Avoid "season" false positives
+                    not last_name.endswith('ward')):   # Avoid "forward" false positives
+                    
+                    if p not in entities["players"]:
+                        entities["players"].append(p)
+                    continue
+        
         # 2. Team names
         for t in self.TEAMS:
-            if t.lower() in q:
-                entities["team"] = t
-                break
+            if t and t.lower() in q:
+                if t not in entities["teams"]:
+                    entities["teams"].append(t)
 
-        # 3. Position (exact)
+        # 3. Position (exact) - now array
         for pos in self.POSITIONS:
             if pos.lower() in q:
-                entities["position"] = pos
-                break
+                if pos not in entities["positions"]:
+                    entities["positions"].append(pos)
 
-        # 3b. Position synonyms
+        # 3b. Position synonyms - now array
         for word, pos in self.POSITION_SYNONYMS.items():
             if word in q:
-                entities["position"] = pos
-                break
+                if pos not in entities["positions"]:
+                    entities["positions"].append(pos)
 
-        # 4. Season ("2023/24")
-        season_match = re.search(r"(20\d{2}\/\d{2})", q)
+        # 4. Season ("2023/24") - now array
+        season_match = re.findall(r"(20\d{2}\/\d{2})", q)
         if season_match:
-            entities["season"] = season_match.group(1)
+            for season in season_match:
+                if season not in entities["season"]:
+                    entities["season"].append(season)
 
-        # 4b. Rule-based
+        # 4b. Rule-based - now array
         if "this season" in q:
-            entities["season"] = max(self.SEASONS)
+            current_season = max(self.SEASONS)
+            if current_season not in entities["season"]:
+                entities["season"].append(current_season)
 
         if "last season" in q:
             sorted_s = sorted(self.SEASONS)
             if len(sorted_s) >= 2:
-                entities["season"] = sorted_s[-2]
+                last_season = sorted_s[-2]
+                if last_season not in entities["season"]:
+                    entities["season"].append(last_season)
 
-        # 5. Gameweek
-        gw = re.search(r"(gw|gameweek)\s*(\d+)", q)
-        if gw:
-            entities["gameweek"] = int(gw.group(2))
+        # 5. Gameweek - now array
+        gw_matches = re.finditer(r"(gw|gameweek)\s*(\d+)", q, re.IGNORECASE)
+        for match in gw_matches:
+            gw_num = int(match.group(2))
+            if gw_num not in entities["gameweek"]:
+                entities["gameweek"].append(gw_num)
 
-        # 6. Stat detection
+        # 6. Stat detection - now array
         for keyword, stat in self.STAT_KEYWORDS.items():
             if keyword in q:
-                entities["stat"] = stat
-                break
+                if stat not in entities["stat"]:
+                    entities["stat"].append(stat)
 
-        # Default stat
+        # Default stat - only add if no stats found
         if not entities["stat"]:
-            entities["stat"] = "total_points"
+            entities["stat"].append("total_points")
 
         return entities
-
+    """
+    Domain-Specific NER for FPL theme.
+    Loads lookup dictionaries from the MS2 Neo4j KG.
+    """
 
 
 def classify_intent_rule_based(user_input):
