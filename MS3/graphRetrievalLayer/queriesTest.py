@@ -9,6 +9,7 @@ from neo4j_connection import Neo4jConnection
 from config_reader import read_config  # if you have a Python file config_reader.py
 from baseline import QUERY_LIBRARY
 
+
 # Read the actual config.txt file
 config_path = os.path.join(os.path.dirname(__file__), "..", "helpers", "config.txt")
 config = read_config(config_path)  # assuming your read_config function takes the path
@@ -30,11 +31,10 @@ except Exception as e:
 
 intent = "player_performance"
 entities = {
-    "players": "Aaron Connolly",
-    "gameweek": 123,
-    "season": "2021-22"
+    "players": ["Erling Haaland"],
+    "gameweek": [],
+    "season": ["2022-23"]
 }
-
 
 
 def choose_query(intent, entities):
