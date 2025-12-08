@@ -3,6 +3,8 @@ import re
 import os
 from dotenv import load_dotenv
 from huggingface_hub import InferenceClient
+from google import genai
+from google.genai import types
 
 load_dotenv()
 
@@ -246,38 +248,37 @@ class FPLEncoderNER:
 # if it fails, fallback to another model
 # if the other model fails, assume first intent in list to not break the RAG    
 def intent_classification(user_input, valid_intent = VALID_INTENTS):
-    hf_token = os.getenv("HF_TOKEN")
+    API_KEY = os.getenv("GEMINI_API_KEY")
    
-    client = InferenceClient(token = hf_token)
-    model_id = "facebook/opt-125m"
-    fallback_model_id = "NousResearch/Llama-2-7b-chat-hf" # Or another supported model
+    client = genai.Client(api_key = API_KEY)
+    model_id = os.getenv("GEMINI_MODEL")
+    fallback_model_id = model_id
     prompt = INTENT_PROMPT.format(user_input)
    
-    def get_llm_response(prompt, model_id="distilgpt2"):
-        response = client.text_generation(
+    def get_llm_response(prompt, model_id=model_id):
+        
+        response = response = client.models.generate_content(
             model=model_id,
-            prompt=prompt,
-            max_new_tokens=50,
-            temperature=0.1
-        )
-        cleaned_response = response.strip().lower()
+            contents=prompt
+)
+        cleaned_response = response
 
-        for intent in valid_intent:
-            if intent in cleaned_response:
-                return intent
+        # for intent in valid_intent:
+        #     if intent in cleaned_response:
+        #         return intent
         return cleaned_response
     
     intent = get_llm_response(prompt)
 
-    if intent not in valid_intent:
-        print(f"model {model_id} failed to classify intent, changing to gpt(akhooh el kbeer)")
+    # if intent not in valid_intent:
+    #     print(f"model {model_id} failed to classify intent, changing to gpt(akhooh el kbeer)")
 
-        intent = get_llm_response(prompt,fallback_model_id)
-        if intent not in valid_intent:
-            print("gpt couldn't classify intent, assuming intent")
-            intent = valid_intent[0]
+    #     intent = get_llm_response(prompt,fallback_model_id)
+    #     if intent not in valid_intent:
+    #         print("gpt couldn't classify intent, assuming intent")
+    #         intent = valid_intent[0]
     
-    return intent.strip().lower()
+    return intent
 
 def input_embedding(input):
     # 1. Load the same embedding model used for KG embeddings
