@@ -1,9 +1,9 @@
 from neo4j.graph import Node, Relationship
-
-
-from neo4j.graph import Node, Relationship
 from sentence_transformers import SentenceTransformer
 from transformers import AutoModel, AutoTokenizer
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+
 
 def entity_to_string(entity):
     """
@@ -59,37 +59,104 @@ def vectorize_sentence_transformer(texts, model_name='all-MiniLM-L6-v2'):
     embeddings = model.encode(texts, convert_to_tensor=False)
     return embeddings
 
-def vectorize_huggingface(texts, model_name='sentence-transformers/all-MiniLM-L6-v2'):
-    """
-    Vectorize a list of strings using a Hugging Face Transformer with mean pooling.
-    
-    Args:
-        texts (list of str): Texts to vectorize
-        model_name (str): Pretrained HF model
-        
-    Returns:
-        embeddings (list of list of floats): Dense embeddings
-    """
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModel.from_pretrained(model_name)
-    
-    embeddings = []
-    for text in texts:
-        inputs = tokenizer(text, return_tensors='pt', truncation=True, padding=True)
-        outputs = model(**inputs)
-        # Mean pooling over the token embeddings
-        token_embeddings = outputs.last_hidden_state  # shape: [1, seq_len, hidden_dim]
-        attention_mask = inputs['attention_mask']
-        mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
-        pooled = (token_embeddings * mask_expanded).sum(1) / mask_expanded.sum(1)
-        embeddings.append(pooled.detach().numpy()[0])
-    return embeddings
 
 def Features_vector_embeddings(record, model_name = 'sentence-transformers/all-MiniLM-L6-v2'): 
     vectorize_sentence_transformer(record_to_string(record), model_name=model_name)
+
+
 
 #example usage
 
 # for record in result:
 #     for value in record.values():
 #         print(entity_to_string(value))
+
+
+def build_feature_index(records, model_name='all-MiniLM-L6-v2'):
+    
+    from sentence_transformers import SentenceTransformer
+    
+    # Load model
+    model = SentenceTransformer(model_name)
+    
+    # Convert all records to strings
+    feature_texts = [record_to_string(record) for record in records]
+    
+    # Generate embeddings in batch
+    feature_embeddings = model.encode(feature_texts, convert_to_tensor=False)
+    
+    # Return index structure
+    return {
+        'feature_texts': feature_texts,
+        'feature_embeddings': feature_embeddings,
+        'feature_records': records,
+        'model': model
+    }
+
+def search_similar_features(index, user_input, k=5):
+    
+    if not index['feature_texts']:
+        return []
+    
+    # Embed user input
+    user_embedding = index['model'].encode([user_input], convert_to_tensor=False)
+    
+    # Calculate cosine similarities
+    similarities = cosine_similarity(user_embedding, index['feature_embeddings'])[0]
+    
+    # Get indices of top k similarities
+    top_indices = np.argsort(similarities)[::-1][:k]
+    
+    # Filter by threshold and collect results
+    results = []
+    for idx in top_indices:
+        # if similarities[idx] >= similarity_threshold:
+            result = {
+                'text': index['feature_texts'][idx],
+                'similarity': float(similarities[idx]),
+                'record': index['feature_records'][idx]
+            }
+            results.append(result)
+    
+    return results
+
+def search_similar_features_with_embedding(index, user_embedding, k=5, similarity_threshold=0.5):
+    
+    if not index['feature_texts']:
+        return []
+    
+    # Calculate cosine similarities
+    similarities = cosine_similarity([user_embedding], index['feature_embeddings'])[0]
+    
+    # Get indices of top k similarities
+    top_indices = np.argsort(similarities)[::-1][:k]
+    
+    # Filter by threshold and collect results
+    results = []
+    for idx in top_indices:
+        if similarities[idx] >= similarity_threshold:
+            result = {
+                'text': index['feature_texts'][idx],
+                'similarity': float(similarities[idx]),
+                'record': index['feature_records'][idx]
+            }
+            results.append(result)
+    
+    return results
+
+def get_top_k_features_for_llm(index, user_input, k=5):
+    
+    # Search for similar features
+    similar_features = search_similar_features(index, user_input, k=k)
+    
+    # Extract just the feature texts and records
+    top_features = [feature['text'] for feature in similar_features]
+    feature_records = [feature['record'] for feature in similar_features]
+    
+    return {
+        'user_input': user_input,
+        'top_features': top_features,
+        'feature_records': feature_records
+    }
+
+

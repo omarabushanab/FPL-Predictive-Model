@@ -6,6 +6,8 @@ import json
 import os
 from dotenv import load_dotenv
 
+from RAG import send_query_to_backend
+
 # Load the environment variables from the .env file
 load_dotenv()
 # ---------------------------
@@ -21,6 +23,8 @@ COHERE_MODEL = os.getenv("COHERE_MODEL")
 API_COHERE_KEY = os.getenv("COHERE_API_KEY")
 
 st.title("⚽ FPL Graph-RAG Assistant (Gemini + Mistral + Cohere)")
+
+
 
 
 # ---------------------------
@@ -128,6 +132,8 @@ for msg in st.session_state.messages:
 query = st.chat_input("Ask something about FPL...")
 
 if query:
+
+    send_query_to_backend(query)
 
     # Display & store user message
     st.session_state.messages.append({"role": "user", "content": query})
