@@ -43,7 +43,7 @@ def send_query_to_backend(user_input):
     else:
         print("intent classification part failed")
 
-    conn = Neo4jConnection() 
+    # conn = Neo4jConnection() #needs to add the USER and PASS 
     ner = FPLEncoderNER(conn) 
 
     entities = ner.extract(user_input)
