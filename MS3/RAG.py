@@ -1,9 +1,10 @@
 import sys
 import os
 
-from graphRetrievalLayer.embeddings import build_feature_index, get_top_k_features_for_llm, record_to_string, search_similar_features
+from graphRetrievalLayer.feature_vector_embedding import build_feature_index, get_top_k_features_for_llm, record_to_string, search_similar_features
 from helpers.neo4j_connection import Neo4jConnection
-from preprocessing import FPLEncoderNER
+from preprocessing import FPLEncoderNER, intent_classification
+from helpers.config_reader import read_config
 
 # Add the graphretrievallayer folder to sys.path
 sys.path.append(os.path.join(os.path.dirname(__file__), "graphRetrievalLayer"))
@@ -29,13 +30,13 @@ def execute_query(query, conn, entities):
         result = conn.execute_query(query, parameters=entities)
         for record in result:
             print(record)
-        return record
+        return result
     except Exception as e:
             print("Query execution failed:", e)
 
-def send_query_to_backend(user_input):
-    # intent = intent_classification(user_input)
-    intent = "recommend_player"
+def send_user_input_to_backend(user_input):
+    intent = intent_classification(user_input)
+    # intent = "recommend_player"
 
     if intent:
         print("this is the intent returned from intent_classificatio: ")
@@ -43,16 +44,18 @@ def send_query_to_backend(user_input):
     else:
         print("intent classification part failed")
 
-    # conn = Neo4jConnection() #needs to add the USER and PASS 
+    config = read_config("config.txt") 
+    conn = Neo4jConnection(config["URI"], config["USERNAME"], config["PASSWORD"]) 
     ner = FPLEncoderNER(conn) 
 
     entities = ner.extract(user_input)
+    print(f"this is the entities extracted: {entities}")
 
     query = choose_query(intent, entities)
 
     baseline = execute_query(query,conn,entities)
 
-    print(baseline)
+    print(f"this is the baseline nodes and relations outputted{baseline}")
 
     embedded_data = build_feature_index(baseline)
     
@@ -60,6 +63,9 @@ def send_query_to_backend(user_input):
     features = get_top_k_features_for_llm(embedded_data,user_input)
     print(f"this is the top k features to be entered to the LLM {features}")
 
+    return features
+    
+
 user_input = "what is the total points of Moahmed Salah points in season 2022/23 gw 10"
 print("user input is: " +user_input)
-send_query_to_backend(user_input)
+send_user_input_to_backend(user_input)
