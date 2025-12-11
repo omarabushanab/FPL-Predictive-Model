@@ -16,7 +16,7 @@ queries = [
     "Compare Mohamed Salah and Saka from last season.",
     "Who scored the most goals for Liverpool?",
     "Show me Man City and Chelsea players for gameweek 5 and 6",  # Added example
-    "tell me what arsenal player scored most goals and got most assists in 2022/23.",
+    "tell me what arsenal player scored most goals and got most assists and best form in 2022/23.",
     "Compare forwards and midfielders from 2022/23 season",  # Added example
 ] 
 

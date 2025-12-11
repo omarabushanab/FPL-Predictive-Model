@@ -68,20 +68,44 @@ class FPLEncoderNER:
             "ict": "ict_index",
             "threat": "threat",
             "creativity": "creativity",
+            "creative": "creativity",
+            "own goals": "own_goals",
+            "yellow cards": "yellow_cards",
+            "red cards": "red_cards",
+            "penalties saved": "penalties_saved",
             "influence": "influence",
             "xg": "xG",
             "xa": "xA",
-            "expected points": "expected_points"
+            "expected points": "upcoming_total_points",
+            "upcoming total points": "upcoming_total_points",
+            "upcoming points": "upcoming_total_points",
+            "performance": "form"
         }
 
         # Position synonyms -> mapped to Position.name
         self.POSITION_SYNONYMS = {
             "goalkeeper": "GK",
             "keeper": "GK",
+            "GK": "GK",
+            "gk": "GK",
             "defender": "DEF",
+            "DEf": "DEF",
+            "def": "DEF",
             "centre back": "DEF",
+            "center back": "DEF",
+            "cb": "DEF",
             "fullback": "DEF",
             "midfielder": "MID",
+            "midfield": "MID",
+            "mid": "MID",
+            "central mid": "MID",
+            "central midfielder": "MID",
+            "wing mid": "MID",
+            "CM": "MID",
+            "CAM": "MID",
+            "CDM": "MID",
+            "RM": "MID",
+            "LM": "MID",
             "winger": "MID",
             "forward": "FWD",
             "striker": "FWD",
@@ -89,7 +113,7 @@ class FPLEncoderNER:
         }
 
     # -----------------------------------------------------
-    # Load distinct properties from your MS2 Neo4j KG
+    # Load distinct properties MS2 Neo4j KG
     # -----------------------------------------------------
     def _load_unique(self, label, prop):
         query = f"MATCH (n:{label}) RETURN DISTINCT n.{prop} AS value"
