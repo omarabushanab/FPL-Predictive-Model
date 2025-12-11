@@ -1,3 +1,4 @@
+from cohere import Client
 from sentence_transformers import SentenceTransformer
 import re
 import os
@@ -278,124 +279,41 @@ class FPLEncoderNER:
 # if the other model fails, assume first intent in list to not break the RAG    
 
 
+    
 def intent_classification(user_input, valid_intent= VALID_INTENTS):
-    """
-    Classify user intent using Gemini API with a local model fallback.
+    # Get model and API key from .env file
+    COHERE_API_KEY = os.getenv("COHERE_API_KEY")
+    # Ensure a default model name is available if the .env file is missing COHERE_MODEL
+    model_name = os.getenv("COHERE_MODEL")
+
+    client = Client(api_key=COHERE_API_KEY)
+
+    # 3. Generate content
+    response = client.chat(
+        model=model_name,
+        message=INTENT_PROMPT.format(user_input),
+        max_tokens=500,
+        temperature=0.2
+    )
     
-    Args:
-        user_input (str): The user's query
-        valid_intent (list): List of valid intent labels
     
-    Returns:
-        str: The classified intent or None if classification fails
-    """
-    # 1. Try Gemini API first
-    try:
-        API_KEY = os.getenv("GEMINI_API_KEY")
-        client = genai.Client(api_key=API_KEY)
-        model_id = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-        
-        # Format your prompt (adjust based on your INTENT_PROMPT)
-        prompt = f"""Classify the user's query into one of these intents: {', '.join(valid_intent)}.
-        Query: {user_input}
-        Return only the intent name, nothing else."""
-        
-        response = client.models.generate_content(
-            model=model_id,
-            contents=prompt
-        )
-        
-        if response and response.candidates:
-            intent = response.candidates[0].content.parts[0].text.strip()
-            # Validate the response is a valid intent
-            for valid in valid_intent:
-                if intent.lower() == valid.lower():
-                    print(f"Gemini API classified intent: {intent}")
-                    return valid
-            print(f"Gemini returned non-valid intent: {intent}")
+        # Extract the response text
+    intent_response = response.text.strip()
     
-    except ClientError as e:
-        if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-            print("Gemini API quota exceeded, falling back to local model...")
-        else:
-            print(f"Gemini API error: {e}")
-    except Exception as e:
-        print(f"Unexpected error with Gemini: {e}")
-    
-    # 2. Fallback to local model
-    try:
-        # Load the pre-trained intent classifier [citation:1]
-        model_name = "serj/intent-classifier"
-        device = "cuda"  # Use "cpu" if no GPU available
-        
-        print(f"Loading local model: {model_name}")
-        tokenizer = T5Tokenizer.from_pretrained(model_name)
-        model = T5ForConditionalGeneration.from_pretrained(model_name).to(device)
-        
-        # Format prompt for the T5 model [citation:1]
-        # Adjust the template to match your valid intents
-        intent_options = "\n".join(valid_intent)
-        
-        input_text = f"""
-        Customer: {user_input}
-        END MESSAGE
-        Choose one topic that matches customer's issue.
-        OPTIONS: 
-        {intent_options}
-        Class name: "
-        """
-        
-        # Tokenize and generate
-        input_ids = tokenizer.encode(
-            input_text, 
-            return_tensors="pt", 
-            max_length=512, 
-            truncation=True
-        ).to(device)
-        
-        output = model.generate(input_ids)
-        decoded_output = tokenizer.decode(output[0], skip_special_tokens=True)
-        
-        # Clean and validate the output
-        intent = decoded_output.strip().lower()
-        for valid in valid_intent:
-            if valid.lower() in intent or intent in valid.lower():
-                print(f"Local model classified intent: {valid}")
-                return valid
-        
-        print(f"Local model returned: {decoded_output}")
-        
-    except Exception as e:
-        print(f"Local model also failed: {e}")
-    
-    # 3. Ultimate fallback: keyword matching
-    print("Using keyword fallback...")
-    user_input_lower = user_input.lower()
-    
-    # Define keyword mappings for your intents
-    # Customize this based on your specific intents
-    keyword_mapping = {
-        'player_performance_gw': ['gameweek', 'gw', 'points in gw'],
-        'player_performance_season': ['season', 'total points', '2022/23'],
-        'recommend_player': ['recommend', 'suggest', 'who should i'],
-        'compare_players': ['compare', 'versus', 'vs', 'difference'],
-        # Add more mappings for your other intents
-    }
-    
-    for intent, keywords in keyword_mapping.items():
-        if intent in valid_intent:
-            for keyword in keywords:
-                if keyword in user_input_lower:
-                    print(f"Keyword fallback matched intent: {intent}")
-                    return intent
-    
-    # 4. Default fallback
-    default_intent = valid_intent[0] if valid_intent else None
-    print(f"Using default intent: {default_intent}")
-    return default_intent
-def input_embedding(input):
+    # Check if the response is in valid intents
+    if intent_response in VALID_INTENTS:
+
+        return intent_response
+    else:
+        print(f"Invalid intent received: '{intent_response}'. Valid intents are: {VALID_INTENTS}")
+        # You can return a default intent or raise an error
+        return "unknown"  # or return None, or raise ValueError
+
+
+
+def input_embedding(input, model_name ='all-MiniLM-L6-v2' ):
     # 1. Load the same embedding model used for KG embeddings
-    model = SentenceTransformer('all-MiniLM-L6-v2')
+    model = SentenceTransformer(model_name)
 
     # 2. User input
     user_query = "Find hotels in Paris with good reviews"
