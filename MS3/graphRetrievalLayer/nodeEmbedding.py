@@ -1,263 +1,318 @@
-# similarity based on name 
-
-# import sys
-# import os
-# import pandas as pd
-# import numpy as np
-# from sklearn.preprocessing import StandardScaler
-# from sklearn.decomposition import PCA
-# import matplotlib.pyplot as plt
-
-# sys.path.append(os.path.join(os.path.dirname(__file__), "..", "helpers"))
-# from neo4j_connection import Neo4jConnection
-# from config_reader import read_config  
-
-# # ----------------------------
-# # LangChain + FAISS (community) + HuggingFace
-# # ----------------------------
-# from langchain_community.vectorstores import FAISS
-# from langchain_huggingface import HuggingFaceEmbeddings
-
-# # ----------------------------
-# # Step 0: Config & Neo4j
-# # ----------------------------
-# config_path = os.path.join(os.path.dirname(__file__), "..", "helpers", "configSeif.txt")
-# config = read_config(config_path)
-
-# conn = Neo4jConnection(config["URI"], config["USERNAME"], config["PASSWORD"])
-
-# # Test connection
-# try:
-#     result = conn.execute_query("RETURN 1")
-#     if result:
-#         print("Neo4j connection OK")
-# except Exception as e:
-#     print("Neo4j connection failed:", e)
-
-# # ----------------------------
-# # Step 1: Get numerical features
-# # ----------------------------
-# query = """
-# MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)
-# RETURN p.player_name AS player,
-#        avg(r.minutes) AS minutes,
-#        avg(r.goals_scored) AS goals_scored,
-#        avg(r.assists) AS assists,
-#        avg(r.total_points) AS total_points,
-#        avg(r.bonus) AS bonus,
-#        avg(r.clean_sheets) AS clean_sheets,
-#        avg(r.goals_conceded) AS goals_conceded,
-#        avg(r.own_goals) AS own_goals,
-#        avg(r.penalties_saved) AS penalties_saved,
-#        avg(r.penalties_missed) AS penalties_missed,
-#        avg(r.yellow_cards) AS yellow_cards,
-#        avg(r.red_cards) AS red_cards,
-#        avg(r.saves) AS saves,
-#        avg(r.bps) AS bps,
-#        avg(r.influence) AS influence,
-#        avg(r.creativity) AS creativity,
-#        avg(r.threat) AS threat,
-#        avg(r.ict_index) AS ict_index,
-#        avg(r.form) AS form
-# """
-
-# results = conn.execute_query(query)
-# records = [record.data() for record in results]
-# df_players = pd.DataFrame(records)
-# df_players.fillna(0, inplace=True)
-
-# # ----------------------------
-# # Step 2: Generate embeddings using external model
-# # ----------------------------
-# texts = []
-# for _, row in df_players.iterrows():
-#     text = f"{row['player']} - goals: {row['goals_scored']}, assists: {row['assists']}, points: {row['total_points']}"
-#     texts.append(text)
-
-# embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-
-# # ----------------------------
-# # Step 3: Build FAISS index
-# # ----------------------------
-# vector_store = FAISS.from_texts(texts, embedding_model)
-# retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k":5})
-
-# # ----------------------------
-# # Step 4: Query for similar players
-# # ----------------------------
-# # from langchain.chains import RetrievalQA
-# # from langchain.llms import HuggingFacePipeline
-# # from transformers import pipeline
-
-# # Step 4: Query for similar players using RetrievalQA
-# # Initialize a dummy HuggingFace text-generation pipeline (LLM)
-# player_query = "Mohamed Salah - goals: 0.55, assists: 0.35, points: 6.63"
-
-# # Use the retriever's 'get_relevant_documents' method if available
-# try:
-#     results = retriever.get_relevant_documents(player_query)
-# except AttributeError:
-#     # fallback for new version
-#     results = retriever._get_relevant_documents(player_query, run_manager=None)
-
-# similar_players = [r.page_content for r in results]
-# print(f"Top similar players to Mohamed Salah (via FAISS + external model):")
-# for p in similar_players:
-#     print(p)
-
-# # ----------------------------
-# # Step 5: PCA visualization using numerical stats
-# # ----------------------------
-# features = df_players.drop(columns=['player']).values
-# scaler = StandardScaler()
-# features_scaled = scaler.fit_transform(features)
-
-# pca = PCA(n_components=2)
-# emb_2d = pca.fit_transform(features_scaled)
-
-# plt.figure(figsize=(10,8))
-# plt.scatter(emb_2d[:,0], emb_2d[:,1], color='lightgray', alpha=0.5)
-# for i, name in enumerate(df_players['player']):
-#     if "Salah" in name or any(p.split(" - ")[0] == name for p in similar_players):
-#         plt.scatter(emb_2d[i,0], emb_2d[i,1], label=name, color='red')
-#         plt.text(emb_2d[i,0]+0.02, emb_2d[i,1]+0.02, name, fontsize=9)
-# plt.title("PCA of Player Numerical Features")
-# plt.xlabel("PC1")
-# plt.ylabel("PC2")
-# plt.legend()
-# plt.show()
 import sys
 import os
-import pandas as pd
 import numpy as np
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
-import matplotlib.pyplot as plt
-import faiss
+from sentence_transformers import SentenceTransformer
+import warnings
+warnings.filterwarnings('ignore')
 
+# Configuration for the new model
+NEW_MODEL_NAME = "sentence-transformers/all-mpnet-base-v2"  # Different model
+NEW_EMBEDDING_PROPERTY = "embedding_v2"  # Different property name
+
+# 1 Add helpers folder to path
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "helpers"))
+
+# 2 Import connection and config reader
 from neo4j_connection import Neo4jConnection
 from config_reader import read_config  
 
-# ----------------------------
-# LangChain + FAISS (optional text-based embeddings)
-# ----------------------------
-from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
-
-# ----------------------------
-# Step 0: Config & Neo4j
-# ----------------------------
+# 3 Load config
 config_path = os.path.join(os.path.dirname(__file__), "..", "helpers", "configSeif.txt")
 config = read_config(config_path)
+print("[Step 3] Loaded config:", config)
 
+# 4 Initialize Neo4j connection
 conn = Neo4jConnection(config["URI"], config["USERNAME"], config["PASSWORD"])
 
-# Test connection
+# 5 Test connection
 try:
     result = conn.execute_query("RETURN 1")
     if result:
-        print("Neo4j connection OK")
+        print("[Step 5] Neo4j connection OK")
 except Exception as e:
-    print("Neo4j connection failed:", e)
+    print("[Step 5] Neo4j connection failed:", e)
 
-# ----------------------------
-# Step 1: Get numerical features
-# ----------------------------
-query = """
-MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)
-RETURN p.player_name AS player,
-       avg(r.minutes) AS minutes,
-       avg(r.goals_scored) AS goals_scored,
-       avg(r.assists) AS assists,
-       avg(r.total_points) AS total_points,
-       avg(r.bonus) AS bonus,
-       avg(r.clean_sheets) AS clean_sheets,
-       avg(r.goals_conceded) AS goals_conceded,
-       avg(r.own_goals) AS own_goals,
-       avg(r.penalties_saved) AS penalties_saved,
-       avg(r.penalties_missed) AS penalties_missed,
-       avg(r.yellow_cards) AS yellow_cards,
-       avg(r.red_cards) AS red_cards,
-       avg(r.saves) AS saves,
-       avg(r.bps) AS bps,
-       avg(r.influence) AS influence,
-       avg(r.creativity) AS creativity,
-       avg(r.threat) AS threat,
-       avg(r.ict_index) AS ict_index,
-       avg(r.form) AS form
-"""
+# 6 Fetch all nodes
+def fetch_nodes(tx):
+    query = """
+    MATCH (n)
+    RETURN elementId(n) AS node_id, labels(n) AS labels, n AS props
+    """
+    return list(tx.run(query))
 
-results = conn.execute_query(query)
-records = [record.data() for record in results]
-df_players = pd.DataFrame(records)
-df_players.fillna(0, inplace=True)
+with conn.driver.session() as session:
+    nodes = session.execute_read(fetch_nodes)
 
-# ----------------------------
-# Step 2: Numerical embeddings for similarity search
-# ----------------------------
-features = df_players.drop(columns=['player']).values
-scaler = StandardScaler()
-features_scaled = scaler.fit_transform(features)
+print(f"[Step 6] Found {len(nodes)} total nodes")
 
-# Build FAISS index for numerical vectors
-dimension = features_scaled.shape[1]
-index = faiss.IndexFlatL2(dimension)
-index.add(features_scaled.astype('float32'))
+# 7 Check which nodes already have embeddings (for the NEW property)
+def check_existing_embeddings(tx, node_ids, embedding_property):
+    """Check which nodes already have embeddings in the specified property"""
+    query = f"""
+    UNWIND $node_ids AS node_id
+    MATCH (n) WHERE elementId(n) = node_id
+    RETURN node_id, n.{embedding_property} IS NOT NULL AS has_embedding
+    """
+    result = tx.run(query, node_ids=node_ids)
+    return {record["node_id"]: record["has_embedding"] for record in result}
 
-# Function to find top-k similar players by stats
-def get_similar_players(player_name, k=5):
-    if player_name not in df_players['player'].values:
-        raise ValueError(f"Player {player_name} not found")
-    idx = df_players[df_players['player'] == player_name].index[0]
-    query_vector = features_scaled[idx].reshape(1, -1).astype('float32')
-    distances, indices = index.search(query_vector, k=k+1)  # +1 to exclude self
-    similar_indices = [i for i in indices[0] if i != idx][:k]
-    return df_players.iloc[similar_indices]['player'].tolist()
+node_ids = [n["node_id"] for n in nodes]
 
-# Example usage
-similar_players = get_similar_players("Harry Kane")
-print("Top similar players to Harry Kane based on stats:")
-print(similar_players)
+with conn.driver.session() as session:
+    existing_embeddings = session.execute_read(
+        check_existing_embeddings, 
+        node_ids, 
+        NEW_EMBEDDING_PROPERTY
+    )
 
-# ----------------------------
-# Step 3: Optional - text-based embeddings comparison
-# ----------------------------
-texts = []
-for _, row in df_players.iterrows():
-    # Remove player names for numeric/stat-based text
-    text = f"goals: {row['goals_scored']}, assists: {row['assists']}, points: {row['total_points']}"
-    texts.append(text)
+# Count nodes with and without embeddings
+nodes_with_embeddings = sum(1 for node_id in node_ids if existing_embeddings.get(node_id, False))
+nodes_without_embeddings = len(node_ids) - nodes_with_embeddings
 
-embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-vector_store_text = FAISS.from_texts(texts, embedding_model)
-retriever_text = vector_store_text.as_retriever(search_type="similarity", search_kwargs={"k":5})
+print(f"[Step 7] Using embedding property: '{NEW_EMBEDDING_PROPERTY}'")
+print(f"[Step 7] {nodes_with_embeddings} nodes already have {NEW_EMBEDDING_PROPERTY}")
+print(f"[Step 7] {nodes_without_embeddings} nodes need new {NEW_EMBEDDING_PROPERTY}")
 
-# Query example using text embeddings
-query_text = f"goals: 0.55, assists: 0.35, points: 6.63"
+# Convert each node to text
+def node_to_text(labels, props):
+    if "Player" in labels:
+        return f"Player: {props['player_name']}. Team: {props.get('team','')}. Position: {props.get('position','')}."
+    if "Team" in labels:
+        return f"Team: {props['name']}."
+    if "Position" in labels:
+        return f"Position: {props['name']}."
+    if "Season" in labels:
+        return f"Season: {props['season_name']}."
+    if "Gameweek" in labels:
+        return f"Gameweek {props['GW_number']} in season {props['season']}."
+    if "Fixture" in labels:
+        return f"Fixture {props['fixture_number']} in season {props['season']}."
+    return ""
+
+# 8 Prepare only nodes that need embeddings
+nodes_needing_embeddings = []
+texts_for_embedding = []
+node_ids_needing_embeddings = []
+
+for node in nodes:
+    node_id = node["node_id"]
+    if not existing_embeddings.get(node_id, False):
+        text = node_to_text(node["labels"], node["props"])
+        if text:  # Only create embeddings for nodes with valid text
+            nodes_needing_embeddings.append(node)
+            texts_for_embedding.append(text)
+            node_ids_needing_embeddings.append(node_id)
+
+print(f"[Step 8] Preparing to create embeddings for {len(nodes_needing_embeddings)} nodes")
+print(f"[Step 8] Using model: {NEW_MODEL_NAME}")
+
+# 9 Create embeddings only for nodes that need them
+if nodes_needing_embeddings:
+    model = SentenceTransformer(NEW_MODEL_NAME)
+    embeddings = model.encode(texts_for_embedding, convert_to_numpy=True).astype(np.float32)
+    dim = embeddings.shape[1]
+    print(f"[Step 9] Embedding dimension: {dim}")
+    print(f"[Step 9] Created {len(embeddings)} new embeddings with model: {NEW_MODEL_NAME}")
+else:
+    print(f"[Step 9] All nodes already have {NEW_EMBEDDING_PROPERTY}. Skipping creation.")
+    # Load model for later use if needed
+    model = SentenceTransformer(NEW_MODEL_NAME)
+    
+    # Still need to get dimension for reference
+    sample_text = "Sample text"
+    sample_embedding = model.encode([sample_text], convert_to_numpy=True).astype(np.float32)
+    dim = sample_embedding.shape[1]
+    print(f"[Step 9] Embedding dimension (from sample): {dim}")
+
+# -------------------------------------------------------------------
+# ---------- Store embeddings using CHUNKED UNWIND ----------
+# -------------------------------------------------------------------
+def store_chunk(chunk, embedding_property):
+    query = f"""
+    UNWIND $rows AS row
+    MATCH (n)
+    WHERE elementId(n) = row.id
+    SET n.{embedding_property} = row.emb
+    """
+    with conn.driver.session() as session:
+        session.run(query, rows=chunk)
+
+def chunk_list(lst, chunk_size):
+    for i in range(0, len(lst), chunk_size):
+        yield lst[i:i + chunk_size]
+
+# Only store embeddings if we created new ones
+if nodes_needing_embeddings:
+    # Prepare batch data
+    batch_data = [{"id": nid, "emb": emb.tolist()} 
+                  for nid, emb in zip(node_ids_needing_embeddings, embeddings)]
+    
+    total = len(batch_data)
+    print(f"[Step 9B] Preparing to store {total} embeddings in property '{NEW_EMBEDDING_PROPERTY}' using UNWIND...")
+    
+    # CHUNK SIZE
+    CHUNK = 100
+    
+    count = 0
+    for chunk in chunk_list(batch_data, CHUNK):
+        store_chunk(chunk, NEW_EMBEDDING_PROPERTY)
+        count += len(chunk)
+        remaining = total - count
+        print(f"[Progress] Stored {count}/{total} | Remaining: {remaining}")
+    
+    print(f"[Step 9B] ✔ All new embeddings saved to property '{NEW_EMBEDDING_PROPERTY}' with CHUNKED UNWIND")
+else:
+    print(f"[Step 9B] No new embeddings to store in '{NEW_EMBEDDING_PROPERTY}'")
+
+# ---------- Create Regular Index for the new embedding property ----------
+def create_regular_index(tx, embedding_property):
+    # Check if embedding property exists on any node
+    query_check = f"""
+    MATCH (n) WHERE n.{embedding_property} IS NOT NULL
+    RETURN count(n) as count
+    LIMIT 1
+    """
+    result = tx.run(query_check)
+    record = result.single()
+    
+    if record and record["count"] > 0:
+        # Create an index on the embedding property (regular index, not vector)
+        query = f"""
+        CREATE INDEX {embedding_property}_index IF NOT EXISTS 
+        FOR (n:Player) ON (n.{embedding_property})
+        """
+        tx.run(query)
+        return True
+    return False
+
+# Try to create index (optional)
 try:
-    results_text = retriever_text.get_relevant_documents(query_text)
-except AttributeError:
-    results_text = retriever_text._get_relevant_documents(query_text, run_manager=None)
+    with conn.driver.session() as session:
+        created = session.execute_write(create_regular_index, NEW_EMBEDDING_PROPERTY)
+        if created:
+            print(f"[Step 10] ✔ Regular index created on embedding property '{NEW_EMBEDDING_PROPERTY}'")
+        else:
+            print(f"[Step 10] No nodes with '{NEW_EMBEDDING_PROPERTY}' found, skipping index creation")
+except Exception as e:
+    print(f"[Step 10] Note: Index creation might not be needed or failed: {e}")
 
-similar_players_text = [r.page_content for r in results_text]
-print("Top similar players (text-based embeddings, stats only):")
-print(similar_players_text)
+# ---------- Custom Vector Search using Cosine Similarity (for the new embeddings) ----------
+def search_similar_nodes_custom(question, top_k=10, embedding_property="embedding"):
+    """Custom vector search using cosine similarity with specified embedding property"""
+    # Get query embedding
+    q_emb = model.encode([question], convert_to_numpy=True).astype(np.float32)[0]
+    q_emb_list = q_emb.tolist()
+    
+    query = f"""
+    MATCH (n)
+    WHERE n.{embedding_property} IS NOT NULL
+    // Calculate cosine similarity manually
+    WITH n, 
+         gds.similarity.cosine(n.{embedding_property}, $query_embedding) AS similarity
+    RETURN elementId(n) AS node_id, 
+           labels(n) AS labels, 
+           n.player_name AS name,
+           similarity AS score
+    ORDER BY similarity DESC
+    LIMIT $k
+    """
+    
+    try:
+        with conn.driver.session() as session:
+            results = list(session.run(query, {
+                "k": top_k,
+                "query_embedding": q_emb_list
+            }))
+        return results
+    except Exception as e:
+        # Fallback if GDS functions aren't available
+        print(f"Note: GDS similarity functions not available, using alternative method: {e}")
+        
+        # Alternative: Simple dot product (less accurate but works)
+        query_fallback = f"""
+        MATCH (n)
+        WHERE n.{embedding_property} IS NOT NULL
+        RETURN elementId(n) AS node_id, 
+               labels(n) AS labels, 
+               n.player_name AS name,
+               n.{embedding_property} AS embedding
+        """
+        
+        with conn.driver.session() as session:
+            all_nodes = list(session.run(query_fallback))
+        
+        # Calculate cosine similarity in Python
+        results = []
+        for record in all_nodes:
+            node_emb = np.array(record["embedding"], dtype=np.float32)
+            if len(node_emb) == len(q_emb):
+                # Calculate cosine similarity
+                dot_product = np.dot(q_emb, node_emb)
+                norm_q = np.linalg.norm(q_emb)
+                norm_n = np.linalg.norm(node_emb)
+                if norm_q > 0 and norm_n > 0:
+                    similarity = dot_product / (norm_q * norm_n)
+                    results.append({
+                        "node_id": record["node_id"],
+                        "labels": record["labels"],
+                        "name": record["name"],
+                        "score": float(similarity)
+                    })
+        
+        # Sort by similarity and return top_k
+        results.sort(key=lambda x: x["score"], reverse=True)
+        return results[:top_k]
 
-# ----------------------------
-# Step 4: PCA visualization
-# ----------------------------
-pca = PCA(n_components=2)
-emb_2d = pca.fit_transform(features_scaled)
+# ---------- TEST QUERY with new embeddings ----------
+Q = "Who scored the most goals in 2022?"
+print(f"\n[Step 11] Searching for: {Q}")
+print(f"[Step 11] Using embeddings from property: '{NEW_EMBEDDING_PROPERTY}'")
 
-plt.figure(figsize=(10,8))
-plt.scatter(emb_2d[:,0], emb_2d[:,1], color='lightgray', alpha=0.5)
-for i, name in enumerate(df_players['player']):
-    if name == "Harry Kane" or name in similar_players:
-        plt.scatter(emb_2d[i,0], emb_2d[i,1], label=name, color='red')
-        plt.text(emb_2d[i,0]+0.02, emb_2d[i,1]+0.02, name, fontsize=9)
-plt.title("PCA of Player Numerical Features")
-plt.xlabel("PC1")
-plt.ylabel("PC2")
-plt.legend()
-plt.show()
+results = search_similar_nodes_custom(Q, top_k=10, embedding_property=NEW_EMBEDDING_PROPERTY)
+
+print(f"\n[Step 12] Top results from Neo4j (using {NEW_MODEL_NAME} embeddings):")
+for i, r in enumerate(results, 1):
+    name = r.get('name', 'N/A')
+    if not name or name == 'N/A':
+        name = f"Node {r['node_id']}"
+    print(f"{i}. Score: {r['score']:.4f} | Name: {name} | Labels: {r['labels']}")
+
+# ---------- Statistics ----------
+print("\n" + "="*60)
+print("EMBEDDING STATISTICS:")
+print("="*60)
+print(f"Model used: {NEW_MODEL_NAME}")
+print(f"Embedding property: '{NEW_EMBEDDING_PROPERTY}'")
+print(f"Embedding dimension: {dim}")
+print(f"Total nodes in database: {len(nodes)}")
+print(f"Nodes with '{NEW_EMBEDDING_PROPERTY}': {nodes_with_embeddings}")
+print(f"Nodes without '{NEW_EMBEDDING_PROPERTY}': {nodes_without_embeddings}")
+print(f"New '{NEW_EMBEDDING_PROPERTY}' created in this run: {len(nodes_needing_embeddings)}")
+
+# Optional: Compare with original embeddings if they exist
+def compare_embedding_counts(tx):
+    """Compare counts of different embedding properties"""
+    query = """
+    MATCH (n)
+    RETURN 
+        count(n) as total_nodes,
+        count(n.embedding) as original_embedding_count,
+        count(n.embedding_v2) as v2_embedding_count
+    """
+    result = tx.run(query)
+    return result.single()
+
+try:
+    with conn.driver.session() as session:
+        counts = session.execute_read(compare_embedding_counts)
+    if counts:
+        print(f"\nComparison of embedding properties:")
+        print(f"  Original 'embedding' property: {counts['original_embedding_count']} nodes")
+        print(f"  New '{NEW_EMBEDDING_PROPERTY}' property: {counts['v2_embedding_count']} nodes")
+        print(f"  Total nodes: {counts['total_nodes']}")
+except Exception as e:
+    print(f"\nNote: Could not compare embedding properties: {e}")
+
+# Close connection
+conn.close()
+print("\n[Step 13] Neo4j connection closed")
