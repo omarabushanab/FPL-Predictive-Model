@@ -52,7 +52,7 @@ User Query: "{}"
 
 Answer with ONLY the label.
 """
-
+#TODO needs fixing
 #  b. Entity Extractions 
 class FPLEncoderNER:
     """
