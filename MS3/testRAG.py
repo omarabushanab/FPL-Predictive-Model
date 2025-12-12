@@ -18,9 +18,7 @@ def fix_query_for_schema(query):
     """Fix query to match actual database schema"""
     # Based on your schema:
     # - Player has 'player_name' not 'name'
-    # - Gameweek is in Fixture as 'fixture_number' not 'gameweek'
     # - Season is a node, not a property in all nodes
-    
     # Replace property names to match your schema
     replacements = {
         # Fixture properties
@@ -57,23 +55,33 @@ def execute_player_performance_query(conn, entities):
     query = """
     MATCH (p:Player {player_name: $player_name})
     MATCH (p)-[stats:PLAYED_IN]->(f:Fixture)
-    WHERE f.season = $season AND f.fixture_number = $fixture_number
+    WHERE f.season = $season
+    AND f.fixture_number >= $start_fixture
+    AND f.fixture_number <= $end_fixture
     RETURN 
-        p.player_name as player_name,
-        f.season as season,
-        f.fixture_number as gameweek,
-        stats.total_points as total_points,
-        stats.minutes as minutes,
-        stats.goals_scored as goals_scored,
-        stats.assists as assists
+    p.player_name AS player_name,
+    f.season AS season,
+    f.fixture_number AS fixture_number,
+    stats.total_points AS total_points,
+    stats.minutes AS minutes,
+    stats.goals_scored AS goals_scored,
+    stats.assists AS assists
     """
     
     # Prepare parameters
+    player_name = entities.get("players", [""])[0]
+    season = entities.get("season", [""])[0]
+    gw = int(entities.get("gameweek", [0])[0])
+    start_fixture = (gw - 1) * 10 + 1
+    end_fixture = gw * 10
+
     params = {
-        "player_name": entities.get("players", [""])[0] if entities.get("players") else "",
-        "season": entities.get("season", [""])[0] if entities.get("season") else "",
-        "fixture_number": entities.get("gameweek", [0])[0] if entities.get("gameweek") else 0
+        "player_name": player_name,
+        "season": season,
+        "start_fixture": start_fixture,
+        "end_fixture": end_fixture
     }
+
     
     print(f"Executing query with params: {params}")
     
@@ -112,7 +120,9 @@ def explore_fixture_data(conn, season, gameweek):
     """Check what fixture data exists"""
     query = """
     MATCH (f:Fixture)
-    WHERE f.season = $season AND f.fixture_number = $gameweek
+    WHERE f.season = $season
+        AND f.fixture_number >= $start_fixture
+        AND f.fixture_number <= $end_fixture
     RETURN 
         f.season as season,
         f.fixture_number as gameweek,
@@ -206,7 +216,7 @@ def main():
     
     conn = Neo4jConnection(URI, USERNAME, PASSWORD)
     
-    user_input = "what is the total points of Mohamed Salah in season 2022-23 gw 10"
+    user_input = "what is the total points of Mohamed Salah in season 2022-23 gw 4"
     print(f"User input: {user_input}")
     
     # Get intent and entities

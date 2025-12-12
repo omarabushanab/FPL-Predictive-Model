@@ -18,9 +18,19 @@ queries = [
     "Show me Man City and Chelsea players for gameweek 5 and 6",  # Added example
     "tell me what arsenal player scored most goals and got most assists and best form in 2022/23.",
     "Compare forwards and midfielders from 2022/23 season",  # Added example
+    "Compare forwards and defenders from 2020-21 season",
 ] 
 
 for q in queries: 
     print("\nQuery:", q) 
     entities = ner.extract(q)
     print("Entities:", json.dumps(entities, indent=2))
+
+def get_distinct_gameweeks(conn):
+    """Get all distinct gameweeks from the database."""
+    query = "MATCH (g:Gameweek) WHERE g.GW_number IS NOT NULL RETURN DISTINCT g.GW_number AS value ORDER BY toInteger(value)"
+    records = conn.execute_query(query)
+    return [r["value"] for r in records]
+
+# Then call it with:
+print("Distinct Gameweeks:", get_distinct_gameweeks(conn))

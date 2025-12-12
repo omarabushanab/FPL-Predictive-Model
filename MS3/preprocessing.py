@@ -77,6 +77,8 @@ class FPLEncoderNER:
             "assist": "assists",
             "points": "total_points",
             "point": "total_points",
+            "goals conceded": "goals_conceded",
+            "conceded": "goals_conceded",
             "form": "form",
             "clean sheet": "clean_sheets",
             "clean sheets": "clean_sheets",
@@ -91,7 +93,9 @@ class FPLEncoderNER:
             "yellow cards": "yellow_cards",
             "red cards": "red_cards",
             "penalties saved": "penalties_saved",
+            "penalties missed": "penalties_missed",
             "influence": "influence",
+            "bps": "bps",
             "xg": "xG",
             "xa": "xA",
             "expected points": "upcoming_total_points",
@@ -197,8 +201,8 @@ class FPLEncoderNER:
                 if (last_name in query_words and 
                     len(last_name) > 3 and  # Avoid short names
                     last_name not in common_words and
-                    not last_name.endswith('son') and  # Avoid "season" false positives
-                    not last_name.endswith('ward')):   # Avoid "forward" false positives
+                    not last_name.endswith('ason') and  # Avoid "season" false positives
+                    not last_name.endswith('rward')):   # Avoid "forward" false positives
                     
                     if p not in entities["players"]:
                         entities["players"].append(p)
@@ -222,16 +226,19 @@ class FPLEncoderNER:
                 if pos not in entities["positions"]:
                     entities["positions"].append(pos)
 
-        # 4. Season ("2023/24") - now array
-        season_match = re.findall(r"(20\d{2}\/\d{2})", q)
+        # 4. Season - accepts both "2023/24" and "2023-24", stores as "2023-24"
+        season_match = re.findall(r"(20\d{2}[/-]\d{2})", q)
         if season_match:
             for season in season_match:
-                if season not in entities["season"]:
-                    entities["season"].append(season)
+                # Convert any / to - for consistent storage
+                season_dash = season.replace('/', '-')
+                if season_dash not in entities["season"]:
+                    entities["season"].append(season_dash)
 
         # 4b. Rule-based - now array
         if "this season" in q:
             current_season = max(self.SEASONS)
+            # Convert / to - in the current season
             if current_season not in entities["season"]:
                 entities["season"].append(current_season)
 
@@ -239,15 +246,37 @@ class FPLEncoderNER:
             sorted_s = sorted(self.SEASONS)
             if len(sorted_s) >= 2:
                 last_season = sorted_s[-2]
+                
                 if last_season not in entities["season"]:
                     entities["season"].append(last_season)
 
         # 5. Gameweek - now array
-        gw_matches = re.finditer(r"(gw|gameweek)\s*(\d+)", q, re.IGNORECASE)
+        # First: explicit "gw" or "gameweek" mentions
+        gw_matches = re.finditer(r"(gw|gameweek)\s*(\d{1,2})", q, re.IGNORECASE)
         for match in gw_matches:
-            gw_num = int(match.group(2))
+            gw_num = match.group(2)
             if gw_num not in entities["gameweek"]:
                 entities["gameweek"].append(gw_num)
+
+        # If there were explicit GW mentions, prefer them and skip the fallback
+        if not entities["gameweek"]:
+            # Remove season substrings like "2022-23" or "2022/23" so their numeric parts are not mistaken
+            q_no_season = re.sub(r"\b20\d{2}[/-]\d{2}\b", " ", q)
+
+            # Also remove any 'season' word contexts to be safe
+            q_no_season = q_no_season.replace("season", " ")
+
+            # Look for standalone numbers that could be GWs (1-38), but avoid numbers inside larger numbers
+            standalone_matches = re.findall(r"\b(\d{1,2})\b", q_no_season)
+            for num_str in standalone_matches:
+                try:
+                    num_int = int(num_str)
+                    if 1 <= num_int <= 38:
+                        if num_str not in entities["gameweek"]:
+                            entities["gameweek"].append(num_str)  # Store as string
+                except ValueError:
+                    pass
+
 
         # 6. Stat detection - now array
         for keyword, stat in self.STAT_KEYWORDS.items():
