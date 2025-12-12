@@ -24,51 +24,48 @@ model_name_v2 ="sentence-transformers/all-mpnet-base-v2"  # Different model
 
 def semantic_search_nodes(user_input, model_name, conn, top_k=7):
     """
-    Embed the user input using the specified model, then run similarity search 
-    inside Neo4j to find the top-k most similar nodes.
-
-    Args:
-        user_input (str): Raw text from the user.
-        model_name (str): The embedding model name, e.g. "sentence-transformers/all-MiniLM-L6-v2".
-        conn (Neo4jConnection): Your Neo4j connection wrapper.
-        top_k (int): How many nodes to return.
-
-    Returns:
-        list[dict]: Top-k nodes with similarity score and node data.
+    Embed the user input, detect proper embedding field in Neo4j,
+    and perform a cosine similarity search for top-k nodes.
     """
-    def input_embedding(input,model_name):
-        # 1. Load the same embedding model used for KG embeddings
-        model = SentenceTransformer(model_name)
 
-        # 3. Convert to vector
-        query_vector = model.encode(input)
-        return query_vector
+    from sentence_transformers import SentenceTransformer
+    import numpy as np
 
-    # ----------------------------
-    # 1. Embed the input
-    # ----------------------------
-    query_embedding = input_embedding(user_input, model_name)
+    # 1. Generate query embedding
+    model = SentenceTransformer(model_name)
+    query_embedding = model.encode(user_input).tolist()
+    expected_dim = len(query_embedding)
 
-    # ----------------------------
-    # 2. Determine the embedding field in Neo4j
-    # ----------------------------
-    # You can customize this mapping
-    if "v2" in model_name.lower():
+    # 2. Detect embedding field in Neo4j and check dimensions
+    dim_check_query = f"""
+    MATCH (n)
+    WHERE n.embedding IS NOT NULL OR n.embedding_v2 IS NOT NULL
+    RETURN
+        CASE WHEN n.embedding IS NOT NULL THEN size(n.embedding) ELSE null END AS dim_v1,
+        CASE WHEN n.embedding_v2 IS NOT NULL THEN size(n.embedding_v2) ELSE null END AS dim_v2
+    LIMIT 1
+    """
+    dims = conn.execute_query(dim_check_query)
+    if not dims:
+        raise ValueError("No nodes with embeddings found in the database.")
+
+    dim_v1 = dims[0]["dim_v1"]
+    dim_v2 = dims[0]["dim_v2"]
+
+    # choose proper field
+    if dim_v2 == expected_dim:
         embedding_field = "embedding_v2"
-    else:
+    elif dim_v1 == expected_dim:
         embedding_field = "embedding"
+    else:
+        raise ValueError(f"No embedding field matches query dimension {expected_dim} (found dim_v1={dim_v1}, dim_v2={dim_v2})")
 
-    # ----------------------------
-    # 3. Cypher Query for Similarity Search
-    # ----------------------------
-
+    # 3. Run similarity search
     cypher = f"""
     CALL {{
         MATCH (n)
-        WHERE n.{embedding_field} IS NOT NULL
+        WHERE n.{embedding_field} IS NOT NULL AND size(n.{embedding_field}) = $expected_dim
         WITH n, n.{embedding_field} AS node_emb
-
-        // Compute cosine similarity
         WITH n, gds.similarity.cosine(node_emb, $query_embedding) AS score
         RETURN n, score
         ORDER BY score DESC
@@ -77,25 +74,15 @@ def semantic_search_nodes(user_input, model_name, conn, top_k=7):
     RETURN n AS node, score
     """
 
-    # ----------------------------
-    # 4. Execute query
-    # ----------------------------
     results = conn.execute_query(
         cypher,
-        {
-            "query_embedding": query_embedding,
-            "top_k": top_k
-        }
+        {"query_embedding": query_embedding, "expected_dim": expected_dim, "top_k": top_k}
     )
 
-    # ----------------------------
-    # 5. Convert nodes to simple Python dicts
-    # ----------------------------
     output = []
     for r in results:
         node = r["node"]
         score = r["score"]
-
         output.append({
             "labels": list(node.labels),
             "properties": dict(node),
@@ -103,7 +90,6 @@ def semantic_search_nodes(user_input, model_name, conn, top_k=7):
         })
 
     return output
-
 
 # preprocessing.input_preprocessing("Get top players by position in season 2023")
 
@@ -138,7 +124,9 @@ def send_user_input_to_backend(user_input,conn):
 
     entities = ner.extract(user_input)
     print(f"this is the entities extracted: {entities}")
-
+# Convert gameweek strings to integers for Neo4j queries
+    if 'gameweek' in entities:
+        entities['gameweek'] = [int(gw) for gw in entities['gameweek']]
     query = choose_query(intent, entities)
 
     baseline = execute_query(query,conn,entities)
@@ -148,7 +136,11 @@ def send_user_input_to_backend(user_input,conn):
     features = semantic_search_nodes(user_input, model_name,conn)
     
     
-    print(f"this is the top k features to be entered to the LLM {features}")
+    for i, feat in enumerate(features):
+        props = feat['properties']
+        name = props.get('player_name', props.get('name', 'Unknown'))
+        print(f"{i+1}. Name: {name}, Labels: {feat['labels']}, Score: {feat['similarity_score']:.4f}")
+
 
     return baseline, features
 
