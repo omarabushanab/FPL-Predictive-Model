@@ -54,9 +54,9 @@ def semantic_search_nodes(user_input, model_name, conn, top_k=7):
     # ----------------------------
     # You can customize this mapping
     if "v2" in model_name.lower():
-        embedding_field = "embeddings_v2"
+        embedding_field = "embedding_v2"
     else:
-        embedding_field = "embeddings"
+        embedding_field = "embedding"
 
     # ----------------------------
     # 3. Cypher Query for Similarity Search
@@ -65,7 +65,7 @@ def semantic_search_nodes(user_input, model_name, conn, top_k=7):
     cypher = f"""
     CALL {{
         MATCH (n)
-        WHERE exists(n.{embedding_field})
+        WHERE n.{embedding_field} IS NOT NULL
         WITH n, n.{embedding_field} AS node_emb
 
         // Compute cosine similarity
@@ -80,7 +80,7 @@ def semantic_search_nodes(user_input, model_name, conn, top_k=7):
     # ----------------------------
     # 4. Execute query
     # ----------------------------
-    results = conn.query(
+    results = conn.execute_query(
         cypher,
         {
             "query_embedding": query_embedding,
@@ -151,11 +151,13 @@ def send_user_input_to_backend(user_input,conn):
     print(f"this is the top k features to be entered to the LLM {features}")
 
     return baseline, features
-    
+
+
 load_dotenv()
 URI = os.getenv("URI")
-USERNAME = os.getenv("USERNAME")
+USERNAME = os.getenv("DB-USERNAME")
 PASSWORD = os.getenv("PASSWORD")
+print(f"this is the URI: {URI}, username: {USERNAME}, password: {PASSWORD}")
 
 conn = Neo4jConnection(URI,USERNAME,PASSWORD)
 
