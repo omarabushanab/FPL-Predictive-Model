@@ -22,7 +22,7 @@ OLD_EMBEDDING_PROPERTY ="embedding"
 model_name = "sentence-transformers/all-MiniLM-L6-v2"
 model_name_v2 ="sentence-transformers/all-mpnet-base-v2"  # Different model
 
-def semantic_search_nodes(user_input, model_name, conn, top_k=7):
+def semantic_search_nodes(user_input, embedding_choice, conn, top_k=7):
     """
     Embed the user input, detect proper embedding field in Neo4j,
     perform cosine similarity search, and return REAL properties 
@@ -32,7 +32,7 @@ def semantic_search_nodes(user_input, model_name, conn, top_k=7):
     from sentence_transformers import SentenceTransformer
 
     # 1. Generate embedding for the input
-    model = SentenceTransformer(model_name)
+    model = SentenceTransformer(embedding_choice)
     query_embedding = model.encode(user_input).tolist()
     expected_dim = len(query_embedding)
 
@@ -150,7 +150,7 @@ def send_user_input_to_backend(user_input,conn,embedding_choice):
 
     print(f"this is the baseline nodes and relations outputted{baseline}")
 
-    features = semantic_search_nodes(user_input, model_name,conn)
+    features = semantic_search_nodes(user_input, embedding_choice,conn)
     
     
     for i, feat in enumerate(features):
