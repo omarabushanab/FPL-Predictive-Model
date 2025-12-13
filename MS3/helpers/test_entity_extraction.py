@@ -15,7 +15,7 @@ queries = [
     "Show me the best Arsenal defenders and best Manchester United and Manchester city defenders.",
     "Compare Mohamed Salah's and Saka's and kevin de bruyne from last season Elneny.",
     "Who scored the most goals for Liverpool?",
-    "Show me Man City and Chelsea players for gameweek 5 and 6",
+    "Show me Man City and Chelsea players for gameweek 5 and 6 and gameweek 8 to 11 and gw 11,12,13",
     "tell me what arsenal player scored most goals and got most assists and best form in 2022/23.",
     "Compare forwards and midfielders from 2022/23 season",
     "Compare forwards and defenders from 2020-21 season",

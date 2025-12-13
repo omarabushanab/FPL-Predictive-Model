@@ -301,13 +301,46 @@ class FPLEncoderNER:
                     entities["season"].append(last_season)
 
         # 5. Gameweek - now array
-        # First: explicit "gw" or "gameweek" mentions
-        gw_matches = re.finditer(r"(gw|gameweek)\s*(\d{1,2})", q, re.IGNORECASE)
-        for match in gw_matches:
+        # First: explicit "gw" or "gameweek" mentions (captures "gameweek 5 and 6", "gw 5,6", "gameweek 5-6")
+        for match in re.finditer(r"(gw|gameweek)\s*(\d{1,2})", q, re.IGNORECASE):
             gw_num = match.group(2)
             if gw_num not in entities["gameweek"]:
                 entities["gameweek"].append(gw_num)
 
+            # look ahead for additional numbers joined by "and", commas, or simple ranges
+            pos = match.end()
+            while True:
+                # 1) range: "-6" or "to 6"  (e.g., "gameweek 5-6" or "gameweek 5 to 6")
+                range_match = re.match(r"\s*(?:-|to)\s*(\d{1,2})", q[pos:], re.IGNORECASE)
+                if range_match:
+                    end_gw = range_match.group(1)
+                    try:
+                        start = int(gw_num)
+                        end = int(end_gw)
+                        if start <= end:
+                            for n in range(start + 1, end + 1):
+                                s = str(n)
+                                if s not in entities["gameweek"]:
+                                    entities["gameweek"].append(s)
+                    except ValueError:
+                        pass
+                    pos += range_match.end()
+                    break  # range consumed, stop lookahead for this match
+
+                # 2) comma / and separated next numbers: ", 6" or "and 6"
+                sep_match = re.match(r"\s*(?:and|,)\s*(\d{1,2})", q[pos:], re.IGNORECASE)
+                if sep_match:
+                    extra = sep_match.group(1)
+                    if extra not in entities["gameweek"]:
+                        entities["gameweek"].append(extra)
+                    pos += sep_match.end()
+                    # continue loop to allow "and 6, 7" chains
+                    continue
+
+                # nothing more in the lookahead
+                break
+
+        # Gameweeks
         # If there were explicit GW mentions, prefer them and skip the fallback
         if not entities["gameweek"]:
             # Remove season substrings like "2022-23" or "2022/23" so their numeric parts are not mistaken
