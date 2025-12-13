@@ -73,6 +73,49 @@ def build_context(baseline_records, embedding_records):
     return context
 
 
+# ---------------------------
+# NICE DISPLAY HELPERS (KG TRANSPARENCY)
+# ---------------------------
+def display_baseline_results(baseline_records):
+    st.subheader("🔗 Baseline KG Results")
+
+    if not baseline_records:
+        st.info("No baseline KG results found.")
+        return
+
+    for i, record in enumerate(baseline_records, 1):
+        with st.expander(f"Baseline Result #{i}", expanded=False):
+            for key, value in record.items():
+
+                # Relationship (PLAYED_IN etc.)
+                if hasattr(value, "type") and hasattr(value, "properties"):
+                    st.markdown(f"**Relationship:** `{value.type}`")
+                    st.json(value.properties)
+
+                # Normal attributes (player, season, gameweek, etc.)
+                else:
+                    st.markdown(f"**{key}:** {value}")
+
+def display_embedding_results(embedding_records):
+    st.subheader("🧠 Embedding (Semantic) KG Results")
+
+    if not embedding_records:
+        st.info("No embedding results found.")
+        return
+
+    for i, item in enumerate(embedding_records, 1):
+        with st.expander(f"Similar Node #{i} (score: {item.get('similarity_score', 'N/A')})", expanded=False):
+            if "labels" in item:
+                st.markdown("**Labels:**")
+                st.code(", ".join(item["labels"]))
+
+            if "properties" in item:
+                st.markdown("**Properties:**")
+                st.json(item["properties"])
+
+            if "similarity_score" in item:
+                st.markdown(f"**Similarity Score:** `{item['similarity_score']:.4f}`")
+
 
 
 # ---------------------------
@@ -164,6 +207,20 @@ def models():
         print(f"this is the features returned to main.py {feature}")
         print(f"this is the baseline returned to main.py {baseline}")
 
+        # ---------------------------
+        # KG TRANSPARENCY SECTION
+        # ---------------------------
+        with st.expander("📊 View KG-Retrieved Context (Before LLM)", expanded=False):
+
+            st.markdown(
+                """
+                This section shows the **raw information retrieved from the Knowledge Graph**
+                *before* it is processed by the LLM.
+                """
+            )
+
+            display_baseline_results(baseline)
+            display_embedding_results(feature)
 
         # Display & store user message
         st.session_state.messages.append({"role": "user", "content": query})
