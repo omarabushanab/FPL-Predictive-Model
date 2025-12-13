@@ -7,6 +7,7 @@ import os
 from dotenv import load_dotenv
 import RAG
 from helpers.neo4j_connection import Neo4jConnection
+import time
 
 # Load the environment variables from the .env file
 load_dotenv()
@@ -29,21 +30,26 @@ PASSWORD = os.getenv("PASSWORD")
 
 
 # ---------------------------
-# DUMMY KG RESULTS
+# MATRIX
 # ---------------------------
-dummy_baseline = {
-    "players": [
-        {"name": "Erling Haaland", "team": "Man City", "points": 250, "position": "FWD"},
-        {"name": "Mohamed Salah", "team": "Liverpool", "points": 230, "position": "MID"},
-    ]
-}
+def compute_metrics(prompt, answer, start_time, model_name):
+    latency = round(time.time() - start_time, 3)
 
-dummy_embeddings = {
-    "similar_players": [
-        {"name": "Julian Alvarez", "team": "Man City", "similarity": 0.82},
-        {"name": "Darwin Nunez", "team": "Liverpool", "similarity": 0.76}
-    ]
-}
+    # Approx token counts (OK for academic evaluation)
+    prompt_tokens = len(prompt.split())
+    answer_tokens = len(answer.split())
+
+    # Rough cost estimation (can be "Free tier")
+    cost = "Free tier / negligible"
+
+    return {
+        "Model": model_name,
+        "Latency (s)": latency,
+        "Prompt Tokens": prompt_tokens,
+        "Answer Tokens": answer_tokens,
+        "Estimated Cost": cost
+    }
+
 # baseline
 # <Record p.player_name='Aaron Connolly' stats=<Relationship element_id='5:6b9eba7c-0fbf-4c8b-b7cd-2e626e7f569d:1179949699440837391' nodes=(<Node element_id='4:6b9eba7c-0fbf-4c8b-b7cd-2e626e7f569d:783' labels=frozenset() properties={}>, <Node element_id='4:6b9eba7c-0fbf-4c8b-b7cd-2e626e7f569d:12' labels=frozenset() properties={}>) type='PLAYED_IN' properties={'goals_scored': 0, 'bps': 0, 'bonus': 0, 'minutes': 0, 'own_goals': 0, 'clean_sheets': 0, 'goals_conceded': 0, 'total_points': 0, 'penalties_missed': 0, 'red_cards': 0, 'yellow_cards': 0, 'influence': 0.0, 'saves': 0, 'form': 0.0, 'assists': 0, 'threat': 0, 'creativity': 0.0, 'ict_index': 0.0, 'penalties_saved': 0}>>
 # ---------------------------
@@ -243,17 +249,34 @@ def models():
         if model_choice == "Gemini 2.5 Flash":
             with st.chat_message("assistant"):
                 with st.spinner("Gemini Thinking..."):
+                    start_time = time.time()
+
                     response = st.session_state.gemini_client.models.generate_content(
                         model=GEMINI_MODEL,
                         contents=structured_prompt
                     )
                     answer = response.text
+
+                    metrics = compute_metrics(
+                        structured_prompt,
+                        answer,
+                        start_time,
+                        "Gemini 2.5 Flash"
+                    )
+
                 st.write(answer)
+
+                # 📊 METRICS DISPLAY
+                with st.expander("📈 Model Metrics"):
+                    st.json(metrics)
+
 
         # MISTRAL
         elif model_choice == "Mistral Small":
             with st.chat_message("assistant"):
                 with st.spinner("Mistral Thinking..."):
+                    start_time = time.time()
+
                     try:
                         response = st.session_state.mistral_client.chat.complete(
                             model=MISTRAL_MODEL,
@@ -264,12 +287,25 @@ def models():
                     except Exception as e:
                         answer = f"Error with Mistral API: {e}"
 
+                    metrics = compute_metrics(
+                        structured_prompt,
+                        answer,
+                        start_time,
+                        "Mistral Small"
+                    )
+
                 st.write(answer)
+
+                with st.expander("📈 Model Metrics"):
+                    st.json(metrics)
+
 
         # COHERE
         else:
             with st.chat_message("assistant"):
                 with st.spinner("Cohere Thinking..."):
+                    start_time = time.time()
+
                     try:
                         response = st.session_state.cohere_client.chat(
                             model=COHERE_MODEL,
@@ -280,7 +316,18 @@ def models():
                     except Exception as e:
                         answer = f"Error with Cohere API: {e}"
 
+                    metrics = compute_metrics(
+                        structured_prompt,
+                        answer,
+                        start_time,
+                        "Cohere"
+                    )
+
                 st.write(answer)
+
+                with st.expander("📈 Model Metrics"):
+                    st.json(metrics)
+
 
         # Save assistant response
         st.session_state.messages.append({"role": "assistant", "content": answer})
