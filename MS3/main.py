@@ -50,19 +50,25 @@ dummy_embeddings = {
 # BUILD CONTEXT FROM BASELINE + EMBEDDINGS
 # ---------------------------
 def build_context(baseline_records, embedding_records):
-    context = "=== BASELINE RESULTS ===\n"
-    for record in baseline_records:
-        for k, v in record.items():
-            context += f"- {k}: {v}\n"
-        context += "\n"
+    if baseline_records is None:
+        context = "No baseline results found.\n"
+    else:
+        context = "=== BASELINE RESULTS ===\n"
+        for record in baseline_records:
+            for k, v in record.items():
+                context += f"- {k}: {v}\n"
+            context += "\n"
 
 
     # Embedding results
-    context += "\n=== EMBEDDING RESULTS ===\n"
-    for sp in embedding_records:
-        for k, v in sp.items():
-            context += f"- {k}: {v}\n"
-        context += "\n"
+    if embedding_records is None:
+        context += "No embedding results found.\n"
+    else:
+        context += "\n=== EMBEDDING RESULTS ===\n"
+        for sp in embedding_records:
+            for k, v in sp.items():
+                context += f"- {k}: {v}\n"
+            context += "\n"
 
     return context
 
