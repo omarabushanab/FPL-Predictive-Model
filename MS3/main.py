@@ -200,7 +200,18 @@ def models():
     # ---------------------------
     query = st.chat_input("Ask something about FPL...")
 
+
+
     if query:
+        # 1️⃣ SAVE USER MESSAGE IMMEDIATELY
+        st.session_state.messages.append(
+            {"role": "user", "content": query}
+        )
+
+        # 2️⃣ RENDER USER MESSAGE IMMEDIATELY
+        with st.chat_message("user"):
+            st.write(query)
+
 
         conn = Neo4jConnection(URI,USERNAME,PASSWORD)
         baseline,feature = RAG.send_user_input_to_backend(query,conn,embedding_choice)
@@ -222,11 +233,7 @@ def models():
             display_baseline_results(baseline)
             display_embedding_results(feature)
 
-        # Display & store user message
-        st.session_state.messages.append({"role": "user", "content": query})
-        with st.chat_message("user"):
-            st.write(query)
-
+       
         # Build RAG context + prompt
         context = build_context(baseline, feature)
         print(f"this is the context {context}")
