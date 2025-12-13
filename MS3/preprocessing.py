@@ -171,48 +171,98 @@ class FPLEncoderNER:
         }
         
         # 1. Player names - WHOLE WORD MATCHING ONLY
+        # Normalize query tokens once (remove possessives and punctuation)
+        def _normalize_token(tok: str) -> str:
+            tok = tok.lower()
+            # remove trailing possessive "'s" (e.g., "saka's" -> "saka")
+            tok = re.sub(r"'s\b", "", tok)
+            # remove non-alphanumeric characters
+            tok = re.sub(r"[^a-z0-9]", "", tok)
+            return tok
+
+        normalized_query_words = set()
+        for w in q.split():
+            nw = _normalize_token(w)
+            if nw:
+                normalized_query_words.add(nw)
+
+        # Create a normalized version of common_words for comparison
+        normalized_common = { _normalize_token(w) for w in common_words }
+
+        # 1. Player names - WHOLE WORD MATCHING ONLY (robust to case & possessives)
         for p in self.PLAYERS:
             if not p:
                 continue
-                
+
             player_lower = p.lower()
-            player_words = player_lower.split()
-            
+            # split player name into alphanumeric tokens (keeps multi-word names)
+            player_raw_words = re.findall(r"[A-Za-z0-9']+", player_lower)
+
+            # normalize each token (remove punctuation/possessive)
+            player_words = [ _normalize_token(w) for w in player_raw_words if _normalize_token(w) ]
+
+            if not player_words:
+                continue
+
             # Skip very short player names to avoid false positives
             if len(player_words) == 1 and len(player_words[0]) < 4:
                 continue
-                
-            # Strategy 1: Check if ALL words in player name are in query as whole words
-            # (for full name matches like "Erling Haaland")
+
+            # Strategy 1: Check if ALL normalized words in player name are in normalized_query_words
             all_words_match = all(
-                word in query_words and word not in common_words 
+                (word in normalized_query_words) and (word not in normalized_common)
                 for word in player_words
             )
-            
+
             if all_words_match:
                 if p not in entities["players"]:
                     entities["players"].append(p)
-                continue  # Skip to next player if full name matched
-                
+                continue  # matched full name, go to next player
+
             # Strategy 2: Last name only (but avoid common words)
             if len(player_words) > 1:
                 last_name = player_words[-1]
-                # Only match if last name is a whole word in query AND not a common word
-                if (last_name in query_words and 
-                    len(last_name) > 3 and  # Avoid short names
-                    last_name not in common_words and
-                    not last_name.endswith('ason') and  # Avoid "season" false positives
-                    not last_name.endswith('rward')):   # Avoid "forward" false positives
-                    
+                # Only match if normalized last name appears in normalized query AND passes filters
+                if (last_name in normalized_query_words and
+                    len(last_name) > 3 and
+                    last_name not in normalized_common and
+                    not last_name.endswith('ason') and   # avoid "season"
+                    not last_name.endswith('rward')):    # avoid "forward"
                     if p not in entities["players"]:
                         entities["players"].append(p)
                     continue
-        
-        # 2. Team names
+
+        # 2. Team names (handle synonyms like Manchester City / United)
+        TEAM_SYNONYMS = {
+            "manchester city": "man city",
+            "man city": "man city",
+            "manchester united": "man utd",
+            "man united": "man utd",
+            "man utd": "man utd"
+        }
+
+        # normalize query once
+        normalized_q = q.lower()
+
         for t in self.TEAMS:
-            if t and t.lower() in q:
+            if not t:
+                continue
+
+            team_lower = t.lower()
+
+            # Direct match (exact DB name appears in query)
+            if team_lower in normalized_q:
                 if t not in entities["teams"]:
                     entities["teams"].append(t)
+                continue
+
+            # Synonym match (Manchester City / United cases)
+            for phrase, canonical in TEAM_SYNONYMS.items():
+                if phrase in normalized_q and canonical == team_lower:
+                    if t not in entities["teams"]:
+                        entities["teams"].append(t)
+                    break
+
 
         # 3. Position (exact) - now array
         for pos in self.POSITIONS:
