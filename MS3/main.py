@@ -51,41 +51,21 @@ dummy_embeddings = {
 # ---------------------------
 def build_context(baseline_records, embedding_records):
     context = "=== BASELINE RESULTS ===\n"
-
-    # --------------------------
-    # BASELINE (Neo4j Records)
-    # --------------------------
     for record in baseline_records:
-        try:
-            player_name = record["p.player_name"]
-        except:
-            player_name = record.get("player_name", "Unknown")
-
-        stats_rel = record["stats"]
-        stats = stats_rel._properties  # relationship properties
-
-        context += f"\nPlayer: {player_name}\n"
-        context += "Match Stats:\n"
-
-        # Loop through stats dictionary
-        for key, value in stats.items():
-            context += f"  - {key}: {value}\n"
-
+        for k, v in record.items():
+            context += f"- {k}: {v}\n"
         context += "\n"
 
-    # --------------------------
-    # EMBEDDING RESULTS
-    # --------------------------
+
+    # Embedding results
     context += "\n=== EMBEDDING RESULTS ===\n"
-
     for sp in embedding_records:
-        name = sp.get("name", "Unknown")
-        team = sp.get("team", "Unknown")
-        sim = sp.get("similarity", 0)
-
-        context += f"- {name} ({team}), Similarity: {sim}\n"
+        for k, v in sp.items():
+            context += f"- {k}: {v}\n"
+        context += "\n"
 
     return context
+
 
 
 
@@ -151,6 +131,12 @@ def models():
         ["Gemini 2.5 Flash", "Mistral Small", "Cohere"]
     )
 
+    embedding_choice = st.selectbox(
+        "Choose Embedding Model",
+        ["sentence-transformers/all-MiniLM-L6-v2", "sentence-transformers/all-mpnet-base-v2"]
+    )
+    
+
 
     # ---------------------------
     # DISPLAY CHAT HISTORY
@@ -168,9 +154,9 @@ def models():
     if query:
 
         conn = Neo4jConnection(URI,USERNAME,PASSWORD)
-        baseline,feature = RAG.send_user_input_to_backend(query,conn)
-        print(f"this is the baseline returned to main.py {baseline}")
+        baseline,feature = RAG.send_user_input_to_backend(query,conn,embedding_choice)
         print(f"this is the features returned to main.py {feature}")
+        print(f"this is the baseline returned to main.py {baseline}")
 
 
         # Display & store user message
@@ -180,6 +166,7 @@ def models():
 
         # Build RAG context + prompt
         context = build_context(baseline, feature)
+        print(f"this is the context {context}")
         structured_prompt = build_prompt(query, context)
 
         # GEMINI
