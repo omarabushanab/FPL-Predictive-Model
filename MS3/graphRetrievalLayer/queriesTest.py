@@ -12,7 +12,7 @@ from baseline import QUERY_LIBRARY
 
 
 # Read the actual config.txt file
-config_path = os.path.join(os.path.dirname(__file__), "..", "helpers", "config.txt")
+config_path = os.path.join(os.path.dirname(__file__), "..", "helpers", "configSeif.txt")
 config = read_config(config_path)  # assuming your read_config function takes the path
 
 

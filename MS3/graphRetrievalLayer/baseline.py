@@ -1,9 +1,5 @@
 QUERY_LIBRARY = {
 
-# =========================================================
-# 1. PLAYER PERFORMANCE
-# =========================================================
-
 "player_performance_gw": {
     "intent": "player_performance",
     "entities": ["players", "season", "gameweek"],
@@ -45,317 +41,423 @@ QUERY_LIBRARY = {
     """
 },
 
-"player_history": {
-    "intent": "player_history",
-    "entities": ["players"],
-    "cypher": """
-        MATCH (p:Player)
-        WHERE p.player_name IN $players
-        MATCH (p)-[stats:PLAYED_IN]->(f:Fixture)
-        RETURN p.player_name AS player,
-               SUM(stats.total_points) AS total_points,
-               SUM(stats.goals_scored) AS goals,
-               SUM(stats.assists) AS assists,
-               SUM(stats.minutes) AS minutes
-        ORDER BY total_points DESC
-    """
-},
+"player_performance_season_stat": {
+  "intent": "player_performance",
+  "entities": ["players", "season", "stat"],
+  "cypher": """
+    MATCH (p:Player)-[stats:PLAYED_IN]->(:Fixture)
+          <-[:HAS_FIXTURE]-(:Gameweek)
+          <-[:HAS_GW]-(s:Season)
+    WHERE p.player_name IN $players
+      AND s.season_name IN $season
 
+    UNWIND $stat AS stat_name
+
+    RETURN p.player_name AS player,
+           stat_name AS stat,
+           SUM(stats[stat_name]) AS total_value
+    ORDER BY player, stat
+  """
+} ,
+
+"player_history": {
+  "intent": "player_history",
+  "entities": ["players"],
+  "cypher": """
+    MATCH (p:Player)
+    WHERE p.player_name IN $players
+
+    MATCH (p)-[stats:PLAYED_IN]->(:Fixture)
+          <-[:HAS_FIXTURE]-(:Gameweek)
+          <-[:HAS_GW]-(s:Season)
+
+    WITH p, s, collect(properties(stats)) AS stats_list
+
+    RETURN p.player_name AS player,
+           s.season_name AS season,
+           reduce(result = {},
+                  st IN stats_list |
+                  {
+                    minutes:           coalesce(result.minutes, 0) + coalesce(st.minutes, 0),
+                    goals_scored:      coalesce(result.goals_scored, 0) + coalesce(st.goals_scored, 0),
+                    assists:           coalesce(result.assists, 0) + coalesce(st.assists, 0),
+                    total_points:      coalesce(result.total_points, 0) + coalesce(st.total_points, 0),
+                    bonus:             coalesce(result.bonus, 0) + coalesce(st.bonus, 0),
+                    clean_sheets:      coalesce(result.clean_sheets, 0) + coalesce(st.clean_sheets, 0),
+                    goals_conceded:    coalesce(result.goals_conceded, 0) + coalesce(st.goals_conceded, 0),
+                    own_goals:         coalesce(result.own_goals, 0) + coalesce(st.own_goals, 0),
+                    penalties_saved:   coalesce(result.penalties_saved, 0) + coalesce(st.penalties_saved, 0),
+                    penalties_missed:  coalesce(result.penalties_missed, 0) + coalesce(st.penalties_missed, 0),
+                    yellow_cards:      coalesce(result.yellow_cards, 0) + coalesce(st.yellow_cards, 0),
+                    red_cards:         coalesce(result.red_cards, 0) + coalesce(st.red_cards, 0),
+                    saves:             coalesce(result.saves, 0) + coalesce(st.saves, 0),
+                    bps:               coalesce(result.bps, 0) + coalesce(st.bps, 0),
+                    influence:         coalesce(result.influence, 0) + coalesce(st.influence, 0),
+                    creativity:        coalesce(result.creativity, 0) + coalesce(st.creativity, 0),
+                    threat:            coalesce(result.threat, 0) + coalesce(st.threat, 0),
+                    ict_index:         coalesce(result.ict_index, 0) + coalesce(st.ict_index, 0),
+                    form:              coalesce(result.form, 0) + coalesce(st.form, 0)
+                  }
+           ) AS aggregated_stats
+
+    ORDER BY player, season
+  """
+},
 
 "compare_players": {
-    "intent": "compare_players",
-    "entities": ["players", "season"],
-    "cypher": """
-        MATCH (p:Player)
-        WHERE p.player_name IN $players
-        MATCH (p)-[stats:PLAYED_IN]->(f:Fixture)
-        WHERE f.season IN $season
-        WITH p.player_name AS player_name, f.season AS season,
-             SUM(stats.total_points) AS total_points,
-             SUM(stats.goals_scored) AS goals,
-             SUM(stats.assists) AS assists,
-             SUM(stats.minutes) AS minutes
-        RETURN player_name, season, total_points, goals, assists, minutes
-        ORDER BY player_name, season
-    """
+  "intent": "compare_players",
+  "entities": ["players", "season"],
+  "cypher": """
+    MATCH (p:Player)
+    WHERE p.player_name IN $players
+
+    MATCH (p)-[stats:PLAYED_IN]->(:Fixture)
+          <-[:HAS_FIXTURE]-(:Gameweek)
+          <-[:HAS_GW]-(s:Season)
+    WHERE s.season_name IN $season
+
+    WITH p, s, collect(properties(stats)) AS stats_list
+
+    RETURN p.player_name AS player,
+           s.season_name AS season,
+           reduce(result = {},
+                  st IN stats_list |
+                  {
+                    minutes:           coalesce(result.minutes, 0) + coalesce(st.minutes, 0),
+                    goals_scored:      coalesce(result.goals_scored, 0) + coalesce(st.goals_scored, 0),
+                    assists:           coalesce(result.assists, 0) + coalesce(st.assists, 0),
+                    total_points:      coalesce(result.total_points, 0) + coalesce(st.total_points, 0),
+                    bonus:             coalesce(result.bonus, 0) + coalesce(st.bonus, 0),
+                    clean_sheets:      coalesce(result.clean_sheets, 0) + coalesce(st.clean_sheets, 0),
+                    goals_conceded:    coalesce(result.goals_conceded, 0) + coalesce(st.goals_conceded, 0),
+                    own_goals:         coalesce(result.own_goals, 0) + coalesce(st.own_goals, 0),
+                    penalties_saved:   coalesce(result.penalties_saved, 0) + coalesce(st.penalties_saved, 0),
+                    penalties_missed:  coalesce(result.penalties_missed, 0) + coalesce(st.penalties_missed, 0),
+                    yellow_cards:      coalesce(result.yellow_cards, 0) + coalesce(st.yellow_cards, 0),
+                    red_cards:         coalesce(result.red_cards, 0) + coalesce(st.red_cards, 0),
+                    saves:             coalesce(result.saves, 0) + coalesce(st.saves, 0),
+                    bps:               coalesce(result.bps, 0) + coalesce(st.bps, 0),
+                    influence:         coalesce(result.influence, 0) + coalesce(st.influence, 0),
+                    creativity:        coalesce(result.creativity, 0) + coalesce(st.creativity, 0),
+                    threat:            coalesce(result.threat, 0) + coalesce(st.threat, 0),
+                    ict_index:         coalesce(result.ict_index, 0) + coalesce(st.ict_index, 0),
+                    form:              coalesce(result.form, 0) + coalesce(st.form, 0)
+                  }
+           ) AS aggregated_stats
+
+    ORDER BY season, aggregated_stats.total_points DESC
+  """
 },
 
-"top_players_position": {
-    "intent": "top_players_position",
-    "entities": ["positions", "season", "gameweek"],
-    "cypher": """
-        MATCH (s:Season)-[:HAS_GW]->(gw:Gameweek)-[:HAS_FIXTURE]->(f:Fixture)
-        WHERE s.season_name IN $season
-          AND gw.GW_number IN $gameweek
+"team_analysis_season": {
+  "intent": "team_analysis",
+  "entities": ["teams", "season"],
+  "cypher": """
+    MATCH (t:Team)
+    WHERE t.name IN $teams
 
-        MATCH (p:Player)-[:PLAYS_AS]->(pos:Position)
-        WHERE pos.name IN $positions
+    MATCH (t)<-[:HAS_HOME_TEAM|HAS_AWAY_TEAM]-(f:Fixture)
+          <-[:HAS_FIXTURE]-(:Gameweek)
+          <-[:HAS_GW]-(s:Season)
+    WHERE s.season_name IN $season
 
-        MATCH (p)-[stats:PLAYED_IN]->(f)
+    MATCH (p:Player)-[stats:PLAYED_IN]->(f)
 
-        WITH p, pos, SUM(stats.total_points) AS total_points,
-                  SUM(stats.goals_scored) AS goals,
-                  SUM(stats.assists) AS assists
-        RETURN 
-               p.player_name AS player,
-               pos.name AS position,
-               total_points,
-               goals,
-               assists
-        ORDER BY total_points DESC
-        LIMIT 10
-    """
+    WITH t, s, collect(properties(stats)) AS stats_list
+
+    RETURN t.name AS team,
+           s.season_name AS season,
+           reduce(result = {},
+                  st IN stats_list |
+                  {
+                    minutes:           coalesce(result.minutes, 0) + coalesce(st.minutes, 0),
+                    goals_scored:      coalesce(result.goals_scored, 0) + coalesce(st.goals_scored, 0),
+                    assists:           coalesce(result.assists, 0) + coalesce(st.assists, 0),
+                    total_points:      coalesce(result.total_points, 0) + coalesce(st.total_points, 0),
+                    bonus:             coalesce(result.bonus, 0) + coalesce(st.bonus, 0),
+                    clean_sheets:      coalesce(result.clean_sheets, 0) + coalesce(st.clean_sheets, 0),
+                    goals_conceded:    coalesce(result.goals_conceded, 0) + coalesce(st.goals_conceded, 0),
+                    own_goals:         coalesce(result.own_goals, 0) + coalesce(st.own_goals, 0),
+                    penalties_saved:   coalesce(result.penalties_saved, 0) + coalesce(st.penalties_saved, 0),
+                    penalties_missed:  coalesce(result.penalties_missed, 0) + coalesce(st.penalties_missed, 0),
+                    yellow_cards:      coalesce(result.yellow_cards, 0) + coalesce(st.yellow_cards, 0),
+                    red_cards:         coalesce(result.red_cards, 0) + coalesce(st.red_cards, 0),
+                    saves:             coalesce(result.saves, 0) + coalesce(st.saves, 0),
+                    bps:               coalesce(result.bps, 0) + coalesce(st.bps, 0),
+                    influence:         coalesce(result.influence, 0) + coalesce(st.influence, 0),
+                    creativity:        coalesce(result.creativity, 0) + coalesce(st.creativity, 0),
+                    threat:            coalesce(result.threat, 0) + coalesce(st.threat, 0),
+                    ict_index:         coalesce(result.ict_index, 0) + coalesce(st.ict_index, 0),
+                    form:              coalesce(result.form, 0) + coalesce(st.form, 0)
+                  }
+           ) AS aggregated_stats
+
+    ORDER BY team, season
+  """
 },
 
-# =========================================================
-# 2. TEAM ANALYSIS
-# =========================================================
+  "team_analysis_stat": {
+  "intent": "team_analysis",
+  "entities": ["teams", "stat"],
+  "cypher": """
+    MATCH (t:Team)
+    WHERE t.name IN $teams
 
-"team_analysis": {
-    "intent": "team_analysis",
-    "entities": ["teams", "season"],
-    "cypher": """
-        MATCH (s:Season)-[:HAS_GW]->(gw:Gameweek)-[:HAS_FIXTURE]->(f:Fixture)
-        WHERE s.season_name IN $season
+    MATCH (t)<-[:HAS_HOME_TEAM|HAS_AWAY_TEAM]-(f:Fixture)
+    MATCH (p:Player)-[stats:PLAYED_IN]->(f)
 
-        MATCH (t:Team)
-        WHERE t.name IN $teams
+    UNWIND $stat AS stat_name
 
-        // Get players who played in the team's fixture (home or away)
-        MATCH (p:Player)-[stats:PLAYED_IN]->(f)
-        WHERE (f)-[:HAS_HOME_TEAM]->(t) OR (f)-[:HAS_AWAY_TEAM]->(t)
-
-        WITH t, SUM(stats.total_points) AS team_points,
-            SUM(stats.goals_scored) AS goals,
-            SUM(stats.assists) AS assists
-
-        RETURN  
-            t.name AS team_name,
-            team_points,
-            goals,
-            assists
-
-    """
+    RETURN t.name AS team,
+           stat_name AS stat,
+           SUM(stats[stat_name]) AS total_value
+    ORDER BY team, stat
+  """
 },
 
-"team_fixtures": {
-    "intent": "team_fixtures",
+
+"team_fixtures_season": {
+  "intent": "team_fixtures",
+  "entities": ["teams", "season"],
+  "cypher": """
+    MATCH (t:Team)
+    WHERE t.name IN $teams
+
+    MATCH (t)<-[:HAS_HOME_TEAM|HAS_AWAY_TEAM]-(f:Fixture)
+          <-[:HAS_FIXTURE]-(:Gameweek)
+          <-[:HAS_GW]-(s:Season)
+    WHERE s.season_name IN $season
+
+    OPTIONAL MATCH (f)-[:HAS_HOME_TEAM]->(home:Team)
+    OPTIONAL MATCH (f)-[:HAS_AWAY_TEAM]->(away:Team)
+
+    WITH t, f,
+         CASE
+           WHEN home = t THEN away
+           ELSE home
+         END AS opponent
+
+    RETURN t.name AS team,
+           opponent.name AS opponent,
+           f.fixture_number AS fixture_number,
+           f.kickoff_time AS kickoff_time
+    ORDER BY kickoff_time
+  """
+},
+
+
+
+"recommend_player_position_season": {
+  "intent": "recommend_player",
+  "entities": ["positions", "season", "stat"],
+  "cypher": """
+    MATCH (p:Player)-[:PLAYS_AS]->(pos:Position)
+    WHERE pos.name IN $positions
+
+    MATCH (s:Season)-[:HAS_GW]->(gw:Gameweek)-[:HAS_FIXTURE]->(f:Fixture)
+    WHERE s.season_name IN $season
+
+    MATCH (p)-[stats:PLAYED_IN]->(f)
+
+    WITH p, stats, $stat AS stat_list
+    // sum over all requested stats
+    WITH p, REDUCE(total = 0, key IN stat_list | total + coalesce(stats[key], 0)) AS score
+    RETURN p.player_name AS player, SUM(score) AS total_score
+    ORDER BY total_score DESC
+    LIMIT 5
+  """
+},
+
+"recommend_player_position_gw": {
+  "intent": "recommend_player",
+  "entities": ["positions", "gameweek", "stat"],
+  "cypher": """
+    MATCH (p:Player)-[:PLAYS_AS]->(pos:Position)
+    WHERE pos.name IN $positions
+
+    MATCH (gw:Gameweek)-[:HAS_FIXTURE]->(f:Fixture)
+    WHERE gw.GW_number IN $gameweek
+
+    MATCH (p)-[stats:PLAYED_IN]->(f)
+
+    WITH p, stats, $stat AS stat_list
+    // sum over all requested stats
+    WITH p, REDUCE(total = 0, key IN stat_list | total + coalesce(stats[key], 0)) AS score
+
+    RETURN p.player_name AS player, SUM(score) AS total_score
+    ORDER BY total_score DESC
+    LIMIT 5
+  """
+},
+
+"top_scorers_by_position": {
+  "intent": "recommend_player",
+  "entities": ["positions", "season"],
+  "cypher": """
+    MATCH (p:Player)-[:PLAYS_AS]->(pos:Position)
+    WHERE pos.name IN $positions
+
+    MATCH (s:Season)-[:HAS_GW]->(:Gameweek)-[:HAS_FIXTURE]->(f:Fixture)
+    WHERE s.season_name IN $season
+
+    MATCH (p)-[stats:PLAYED_IN]->(f)
+
+    WITH p, pos, SUM(stats.goals_scored) AS contributions
+    RETURN pos.name AS position,
+           p.player_name AS player,
+           contributions
+    ORDER BY position, contributions DESC
+    LIMIT 5
+  """
+},
+
+# ===================== Fixture difficulty queries =====================
+
+  "fixture_difficulty": {
+    "intent": "fixture_difficulty", 
     "entities": ["teams", "season", "gameweek"],
     "cypher": """
-        MATCH (s:Season)-[:HAS_GW]->(gw:Gameweek)-[:HAS_FIXTURE]->(f:Fixture)
-        WHERE s.season_name IN $season
-        AND gw.GW_number IN $gameweek
-
-        MATCH (t:Team)
-        WHERE t.name IN $teams
-
-        MATCH (f)-[:HAS_HOME_TEAM]->(home:Team)
-        MATCH (f)-[:HAS_AWAY_TEAM]->(away:Team)
-
-        WHERE t = home OR t = away
-
-        WITH DISTINCT f, t, home, away, gw
-
-        RETURN t.name AS team_name,
-            f.fixture_number AS fixture,
-            CASE WHEN t = home THEN away.name ELSE home.name END AS opponent,
-            f.kickoff_time AS kickoff_time,
-            gw.GW_number AS gameweek
-        ORDER BY gw.GW_number, f.fixture_number
-
-
-
+      // Get all fixtures for specified teams in season/gameweeks
+      MATCH (t:Team)
+      WHERE t.name IN $teams
+      
+      MATCH (s:Season)
+      WHERE s.season_name IN $season
+      
+      MATCH (s)-[:HAS_GW]->(gw:Gameweek)
+      WHERE gw.GW_number IN $gameweek
+      
+      MATCH (gw)-[:HAS_FIXTURE]->(f:Fixture)
+      WHERE (f)-[:HAS_HOME_TEAM]->(t) OR (f)-[:HAS_AWAY_TEAM]->(t)
+      
+      // Get opponent team
+      OPTIONAL MATCH (f)-[:HAS_HOME_TEAM]->(home:Team)
+      OPTIONAL MATCH (f)-[:HAS_AWAY_TEAM]->(away:Team)
+      
+      WITH t, f, gw, s, home, away,
+           CASE WHEN home = t THEN away ELSE home END AS opponent
+      
+      // Calculate team's historical points
+      OPTIONAL MATCH (s)-[:HAS_GW]->(past_gw:Gameweek)
+      WHERE past_gw.GW_number < gw.GW_number
+      
+      OPTIONAL MATCH (past_gw)-[:HAS_FIXTURE]->(past_f:Fixture)
+      WHERE (past_f)-[:HAS_HOME_TEAM]->(t) OR (past_f)-[:HAS_AWAY_TEAM]->(t)
+      
+      OPTIONAL MATCH (player:Player)-[stats:PLAYED_IN]->(past_f)
+      WITH t, f, opponent, gw, s, home, away,
+           COALESCE(SUM(stats.total_points), 0) AS team_points
+      
+      // Calculate opponent's historical points  
+      OPTIONAL MATCH (s)-[:HAS_GW]->(opp_past_gw:Gameweek)
+      WHERE opp_past_gw.GW_number < gw.GW_number
+      
+      OPTIONAL MATCH (opp_past_gw)-[:HAS_FIXTURE]->(opp_past_f:Fixture)
+      WHERE (opp_past_f)-[:HAS_HOME_TEAM]->(opponent) OR (opp_past_f)-[:HAS_AWAY_TEAM]->(opponent)
+      
+      OPTIONAL MATCH (opp_player:Player)-[opp_stats:PLAYED_IN]->(opp_past_f)
+      WITH t, f, opponent, gw, team_points, home, away,
+           COALESCE(SUM(opp_stats.total_points), 0) AS opponent_points
+      
+      // Calculate difficulty
+      WITH t, f, opponent, gw, team_points, opponent_points,
+           CASE
+             WHEN team_points = 0 AND opponent_points = 0 THEN 'Unknown'
+             WHEN opponent_points > team_points * 1.2 THEN 'Hard'
+             WHEN opponent_points < team_points * 0.8 THEN 'Easy'
+             ELSE 'Medium'
+           END AS difficulty
+      
+      RETURN t.name AS team,
+             opponent.name AS opponent,
+             team_points,
+             opponent_points,
+             difficulty,
+             gw.GW_number AS gameweek,
+             f.fixture_number AS fixture,
+             f.kickoff_time AS kickoff_time
+      ORDER BY f.kickoff_time
     """
-},
+  },
 
-"fixture_difficulty": {
-    "intent": "fixture_difficulty",
-    "entities": ["teams", "season", "gameweek"],
-    "cypher": """
-        MATCH (t:Team)
-        WHERE t.team_name IN $teams
-        MATCH (t)-[:HAS_FIXTURE]->(f:Fixture)
-        WHERE f.season IN $season AND f.gameweek IN $gameweek
-        RETURN t.team_name AS team,
-               f.fixture_number AS fixture,
-               f.opponent AS opponent,
-               f.difficulty_rating AS difficulty
-        ORDER BY difficulty DESC
-    """
-},
 
-# =========================================================
-# 3. SEARCH / LOOKUP
-# =========================================================
+# ===================== search_player =====================
 
 "search_player": {
-    "intent": "search_player",
-    "entities": ["players"],
-    "cypher": """
-        MATCH (p:Player)
-        WHERE p.player_name IN $players
-        RETURN p.player_name AS player,
-               p.position AS position,
-               p.team AS team
-    """
-},
+  "intent": "search_player",
+  "entities": ["players"],
+  "cypher": """
+    MATCH (p:Player)
+    WHERE p.player_name IN $players
+
+    OPTIONAL MATCH (p)-[:PLAYS_AS]->(pos:Position)
+    OPTIONAL MATCH (p)-[stats:PLAYED_IN]->(f:Fixture)
+    OPTIONAL MATCH (f)-[:HAS_HOME_TEAM]->(home_team:Team)
+    OPTIONAL MATCH (f)-[:HAS_AWAY_TEAM]->(away_team:Team)
+    OPTIONAL MATCH (home_team)<-[:HAS_HOME_TEAM|:HAS_AWAY_TEAM]-(f)
+
+    WITH p, pos, collect(DISTINCT {
+      fixture_number: f.fixture_number,
+      season: f.season,
+      kickoff_time: f.kickoff_time,
+      team: CASE WHEN home_team IS NOT NULL AND (f)-[:HAS_HOME_TEAM]->(home_team) THEN home_team.name
+                 ELSE away_team.name END,
+      total_points: stats.total_points,
+      goals_scored: stats.goals_scored,
+      assists: stats.assists
+    }) AS recent_stats
+
+    RETURN p.player_name AS player,
+           pos.name AS position,
+           recent_stats
+    ORDER BY player
+  """
+} ,
 
 "search_team": {
-    "intent": "search_team",
-    "entities": ["teams"],
-    "cypher": """
-        MATCH (t:Team)
-        WHERE t.team_name IN $teams
-        RETURN t.team_name AS team,
-               t.stadium AS stadium,
-               t.manager AS manager
-    """
-},
+  "intent": "search_team",
+  "entities": ["teams", "season"],
+  "cypher": """
+    // Find the season and team(s)
+    MATCH (s:Season)
+    WHERE s.season_name IN $season
 
-# =========================================================
-# 4. RECOMMENDATIONS
-# =========================================================
+    MATCH (t:Team)
+    WHERE t.name IN $teams
 
-"recommend_player": {
-    "intent": "recommend_player",
-    "entities": ["positions", "season", "gameweek"],
-    "cypher": """
-        MATCH (p:Player)
-        WHERE p.position IN $positions
-        MATCH (p)-[stats:PLAYED_IN]->(f:Fixture)
-        WHERE f.season IN $season AND f.gameweek IN $gameweek
-        RETURN p.player_name AS player,
-               SUM(stats.total_points) AS total_points,
-               SUM(stats.goals_scored) AS goals,
-               SUM(stats.assists) AS assists
-        ORDER BY total_points DESC
-        LIMIT 5
-    """
-},
+    // All fixtures in this season
+    MATCH (s)-[:HAS_GW]->(:Gameweek)-[:HAS_FIXTURE]->(f:Fixture)
+    WITH s, t, collect(DISTINCT f) AS seasonFixtures
 
-# =========================================================
-# 5. STATISTICS
-# =========================================================
+    // Find all players who appeared in any fixture in this season
+    UNWIND seasonFixtures AS sf
+    MATCH (p:Player)-[played:PLAYED_IN]->(sf)
+    WITH s, t, p, collect(DISTINCT sf) AS playerFixtures
 
-"players_stat_summary": {
-    "intent": "player_performance",
-    "entities": ["players", "season"],
-    "cypher": """
-        MATCH (p:Player)
-        WHERE p.player_name IN $players
-        MATCH (p)-[stats:PLAYED_IN]->(f:Fixture)
-        WHERE f.season IN $season
-        RETURN p.player_name AS player,
-               AVG(stats.total_points) AS avg_points,
-               AVG(stats.goals_scored) AS avg_goals,
-               AVG(stats.assists) AS avg_assists,
-               AVG(stats.minutes) AS avg_minutes
-    """
-},
+    // Count how many of these fixtures involve the target team
+    WITH s, t, p, playerFixtures,
+        size([x IN playerFixtures WHERE (x)-[:HAS_HOME_TEAM]->(t) OR (x)-[:HAS_AWAY_TEAM]->(t)]) AS fixtures_with_team,
+        size(playerFixtures) AS total_fixtures_played
 
-"team_stat_summary": {
-    "intent": "team_analysis",
-    "entities": ["teams", "season"],
-    "cypher": """
-        MATCH (t:Team)<-[:PART_OF]-(p:Player)-[stats:PLAYED_IN]->(f:Fixture)
-        WHERE t.team_name IN $teams AND f.season IN $season
-        RETURN t.team_name AS team,
-               AVG(stats.total_points) AS avg_points,
-               AVG(stats.goals_scored) AS avg_goals,
-               AVG(stats.assists) AS avg_assists
-    """
-},
+    // Keep only players whose majority of appearances in the season are with the team
+    WHERE fixtures_with_team > 0 AND fixtures_with_team * 2 >= total_fixtures_played
 
-"top_players_overall": {
-    "intent": "top_players_position",
-    "entities": ["season", "gameweek"],
-    "cypher": """
-        MATCH (p:Player)-[stats:PLAYED_IN]->(f:Fixture)
-        WHERE f.season IN $season AND f.gameweek IN $gameweek
-        RETURN p.player_name AS player,
-               SUM(stats.total_points) AS total_points
-        ORDER BY total_points DESC
-        LIMIT 10
-    """
-},
+    // Aggregate stats for these fixtures
+    MATCH (p)-[pl:PLAYED_IN]->(pf:Fixture)
+    WHERE pf IN playerFixtures
 
-"players_minutes_leaders": {
-    "intent": "player_performance",
-    "entities": ["players", "season"],
-    "cypher": """
-        MATCH (p:Player)
-        WHERE p.player_name IN $players
-        MATCH (p)-[stats:PLAYED_IN]->(f:Fixture)
-        WHERE f.season IN $season
-        RETURN p.player_name AS player,
-               SUM(stats.minutes) AS total_minutes
-        ORDER BY total_minutes DESC
-    """
-},
 
-"players_goals_assists": {
-    "intent": "player_performance",
-    "entities": ["players", "season"],
-    "cypher": """
-        MATCH (p:Player)
-        WHERE p.player_name IN $players
-        MATCH (p)-[stats:PLAYED_IN]->(f:Fixture)
-        WHERE f.season IN $season
-        RETURN p.player_name AS player,
-               SUM(stats.goals_scored) AS goals,
-               SUM(stats.assists) AS assists
-        ORDER BY goals DESC
-    """
-},
+    OPTIONAL MATCH (p)-[:PLAYS_AS]->(pos:Position)
 
-"team_clean_sheets": {
-    "intent": "team_analysis",
-    "entities": ["teams", "season"],
-    "cypher": """
-        MATCH (t:Team)<-[:PART_OF]-(p:Player)-[stats:PLAYED_IN]->(f:Fixture)
-        WHERE t.team_name IN $teams AND f.season IN $season
-        RETURN t.team_name AS team,
-               SUM(stats.clean_sheets) AS clean_sheets
-        ORDER BY clean_sheets DESC
-    """
-},
+    WITH t, s, collect(DISTINCT {
+        player_name: p.player_name
+    }) AS players_info
 
-"top_scoring_teams": {
-    "intent": "team_analysis",
-    "entities": ["season"],
-    "cypher": """
-        MATCH (t:Team)<-[:PART_OF]-(p:Player)-[stats:PLAYED_IN]->(f:Fixture)
-        WHERE f.season IN $season
-        RETURN t.team_name AS team,
-               SUM(stats.goals_scored) AS total_goals
-        ORDER BY total_goals DESC
-    """
-},
+    RETURN t.name AS team,
+        s.season_name AS season,
+        players_info
+    ORDER BY team, season
 
-"players_form_last_5gw": {
-    "intent": "player_performance",
-    "entities": ["players", "season", "gameweek"],
-    "cypher": """
-        MATCH (p:Player)
-        WHERE p.player_name IN $players
-        MATCH (p)-[stats:PLAYED_IN]->(f:Fixture)
-        WHERE f.season IN $season AND f.gameweek IN $gameweek
-        RETURN p.player_name AS player,
-               SUM(stats.total_points) AS points_last_5
-        ORDER BY points_last_5 DESC
-    """
-},
-
-"recommended_captain": {
-    "intent": "recommend_player",
-    "entities": ["season", "gameweek"],
-    "cypher": """
-        MATCH (p:Player)-[stats:PLAYED_IN]->(f:Fixture)
-        WHERE f.season IN $season AND f.gameweek IN $gameweek
-        RETURN p.player_name AS player,
-               SUM(stats.total_points) AS points
-        ORDER BY points DESC
-        LIMIT 1
     """
 }
 
