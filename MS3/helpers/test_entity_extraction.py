@@ -14,7 +14,7 @@ queries = [
     "Is Haaland a good pick for GW10 this season?",
     "Show me the best Arsenal defenders and best Manchester United and Manchester city defenders.",
     "Compare Mohamed Salah's and Saka's and kevin de bruyne from last season Elneny.",
-    "Who scored the most goals for Liverpool?",
+    "Who scored the most goals for liverpool",
     "Show me Man City and Chelsea players for gameweek 5 and 6 and gameweek 8 to 11 and gw 11,12,13",
     "tell me what arsenal player scored most goals and got most assists and best form in 2022/23.",
     "Compare forwards and midfielders from 2022/23 season",
@@ -24,7 +24,7 @@ queries = [
     "What were the total points scored by Marcus Rashford in gameweek 15 for the 2022-23 campaign?"
     "Provide the aggregated stats for Harry Kane during the 2022-23 season",
     "How many total points did Bukayo Saka achieve in the 2022-23 season?",
-    "Summarize the season points and minutes for Virgil van Dijk in the 2022-23 campaign"
+    "Summarize the season points and minutes for Virgil van Dijk in the 2022-23 campaign goals assists and compare Goalies Attackers Defenders Midfielders Forwards Manchester United manchester city Arsenal', 'Aston Villa', 'Bournemouth', 'Brentford', 'Brighton', 'Burnley', 'Chelsea', 'Crystal Palace', 'Everton', 'Fulham', 'Leeds', 'Leicester', 'Liverpool', 'Man City', 'Man Utd', 'Newcastle', 'Norwich', Nott'm Forest , 'Southampton', hotspurs Watford', 'West Ham', 'wolverhampton'"
 ] 
 
 for q in queries: 
@@ -38,5 +38,15 @@ def get_distinct_gameweeks(conn):
     records = conn.execute_query(query)
     return [r["value"] for r in records]
 
-# Then call it with:
-print("Distinct Gameweeks:", get_distinct_gameweeks(conn))
+def get_distinct_teams(conn):
+    """Get all distinct team names from the database."""
+    query = """
+    MATCH (t:Team)
+    WHERE t.name IS NOT NULL
+    RETURN DISTINCT t.name AS value
+    ORDER BY value
+    """
+    records = conn.execute_query(query)
+    return [r["value"] for r in records]
+
+print("Distinct Teams:", get_distinct_teams(conn))

@@ -108,6 +108,7 @@ class FPLEncoderNER:
         self.POSITION_SYNONYMS = {
             "goalkeeper": "GK",
             "keeper": "GK",
+            "goalie": "GK",
             "GK": "GK",
             "gk": "GK",
             "defender": "DEF",
@@ -234,11 +235,16 @@ class FPLEncoderNER:
 
         # 2. Team names (handle synonyms like Manchester City / United)
         TEAM_SYNONYMS = {
-            "manchester city": "man city",
-            "man city": "man city",
-            "manchester united": "man utd",
-            "man united": "man utd",
-            "man utd": "man utd"
+            "manchester city": "Man City",
+            "man city": "Man City",
+            "manchester united": "Man Utd",
+            "man united": "Man Utd",
+            "man utd": "Man Utd",
+            "tottenham": "Spurs",
+            "forest": "Nott'm Forest",
+            "nottm forest": "Nott'm Forest",
+            "nottingham": "Nott'm Forest",
+            "wolverhampton": "Wolves",
         }
 
         # normalize query once
@@ -258,7 +264,7 @@ class FPLEncoderNER:
 
             # Synonym match (Manchester City / United cases)
             for phrase, canonical in TEAM_SYNONYMS.items():
-                if phrase in normalized_q and canonical == team_lower:
+                if phrase in normalized_q and canonical.lower() == team_lower:
                     if t not in entities["teams"]:
                         entities["teams"].append(t)
                     break
