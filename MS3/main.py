@@ -40,7 +40,7 @@ def compute_metrics(prompt, answer, start_time, model_name):
     answer_tokens = len(answer.split())
 
     # Rough cost estimation (can be "Free tier")
-    cost = "Free tier / negligible"
+    cost = "Free tier"
 
     return {
         "Model": model_name,
@@ -55,28 +55,44 @@ def compute_metrics(prompt, answer, start_time, model_name):
 # ---------------------------
 # BUILD CONTEXT FROM BASELINE + EMBEDDINGS
 # ---------------------------
+from neo4j.graph import Relationship
+
 def build_context(baseline_records, embedding_records):
-    if baseline_records is None:
-        context = "No baseline results found.\n"
+    context = ""
+
+    # ---------------- BASELINE ----------------
+    if not baseline_records:
+        context += "No baseline results found.\n"
     else:
-        context = "=== BASELINE RESULTS ===\n"
+        context += "=== BASELINE RESULTS ===\n"
+
         for record in baseline_records:
             for k, v in record.items():
-                context += f"- {k}: {v}\n"
+
+                # ✅ Proper Neo4j relationship detection
+                if isinstance(v, Relationship):
+                    context += f"- {k} ({v.type}):\n"
+                    for stat_key, stat_val in v._properties.items():
+                        context += f"    • {stat_key}: {stat_val}\n"
+
+                else:
+                    context += f"- {k}: {v}\n"
+
             context += "\n"
 
-
-    # Embedding results
-    if embedding_records is None:
-        context += "No embedding results found.\n"
+    # ---------------- EMBEDDINGS ----------------
+    if not embedding_records:
+        context += "\nNo embedding results found.\n"
     else:
         context += "\n=== EMBEDDING RESULTS ===\n"
-        for sp in embedding_records:
-            for k, v in sp.items():
+        for item in embedding_records:
+            for k, v in item.items():
                 context += f"- {k}: {v}\n"
             context += "\n"
 
     return context
+
+
 
 
 # ---------------------------
