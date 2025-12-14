@@ -1,4 +1,4 @@
-player_performance_gw
+player_performance_gw 
 -How many minutes did Bruno Fernandes play in the 2022-23 season Gameweek 38?
 -in season 2022-23 Show Bukayo Saka points in gameweek 8
 -What were the total points scored by Marcus Rashford in Gameweek 15 for the 2022-23 campaign?
@@ -9,3 +9,31 @@ player_performance_season
 -Summarize the season points and minutes for Virgil van Dijk in the 2022-23 campaign.
 
 player_history
+-What are the career total points, goals, assists, and minutes played for Mohamed Salah?
+-List the overall goals, assists, and minutes played by Harry Kane throughout his recorded career.
+
+compare_players
+-How did Mohamed Salah compare to Harry Kane in terms of goals, assists, and total points during the 2022-23 season?
+-Show me the total goals, assists, and minutes for Bukayo Saka versus Phil Foden in the 2022-23 season.
+
+top_players_position
+-List the top 10 Midfielders by total points, goals, and assists between Gameweek 1 and Gameweek 5 of the 2022-23 season.
+-Who are the best 10 Goalkeepers based on total points scored during Gameweek 12 of the 2022-23 season?
+
+team_analysis
+-Show me the team totals for points, goals, and assists for Manchester City in the 2022-23 season.
+-I need the goals, assists, and points for Liverpool in the 2022-23 season.
+
+team_fixtures----------------
+-What are the fixtures, opponents, and kickoff times for Manchester United between Gameweek 1 and Gameweek 5 of the 2022-23 season?
+-What are the fixtures, opponents, and kickoff times for Liverpool between Gameweek 1 and Gameweek 5 of the 2022-23 season?
+
+fixture_difficulty-------------------
+-
+
+search_player
+-
+
+
+
+
