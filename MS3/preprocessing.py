@@ -283,11 +283,16 @@ class FPLEncoderNER:
                     entities["positions"].append(pos)
 
         # 4. Season - accepts both "2023/24" and "2023-24", stores as "2023-24"
-        season_match = re.findall(r"(20\d{2}[/-]\d{2})", q)
+        season_match = re.findall(r"(20\d{2}[\-/–—]\d{2})", q)
         if season_match:
             for season in season_match:
                 # Convert any / to - for consistent storage
-                season_dash = season.replace('/', '-')
+                season_dash = season.translate(str.maketrans({
+                    '/': '-',
+                    '–': '-',
+                    '—': '-'
+                }))
+
                 if season_dash not in entities["season"]:
                     entities["season"].append(season_dash)
 
@@ -350,7 +355,7 @@ class FPLEncoderNER:
         # If there were explicit GW mentions, prefer them and skip the fallback
         if not entities["gameweek"]:
             # Remove season substrings like "2022-23" or "2022/23" so their numeric parts are not mistaken
-            q_no_season = re.sub(r"\b20\d{2}[/-]\d{2}\b", " ", q)
+            q_no_season = re.sub(r"\b20\d{2}[\-/–—]\d{2}\b", " ", q)
 
             # Also remove any 'season' word contexts to be safe
             q_no_season = q_no_season.replace("season", " ")
