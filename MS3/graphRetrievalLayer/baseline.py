@@ -2,7 +2,7 @@ QUERY_LIBRARY = {
 
 "player_performance_gw": {
     "intent": "player_performance",
-    "entities": ["players", "season", "gameweek"],
+    "entities": ["players", "season", "gameweek"] ,
     "cypher": """
         MATCH (p:Player)
         WHERE p.player_name IN $players
@@ -19,6 +19,36 @@ QUERY_LIBRARY = {
                stats
     """
 },
+
+"player_performance_gw": {
+  "intent": "player_performance",
+  "entities": ["players", "season", "gameweek", "stat"],
+  "cypher": """
+    MATCH (p:Player)
+    WHERE p.player_name IN $players
+
+    MATCH (s:Season)
+    WHERE s.season_name IN $season
+
+    MATCH (s)-[:HAS_GW]->(gw:Gameweek)
+    WHERE gw.GW_number IN $gameweek
+
+    MATCH (gw)-[:HAS_FIXTURE]->(f:Fixture)
+    MATCH (p)-[stats:PLAYED_IN]->(f)
+
+    // Build a map of requested stats only
+    WITH p, s, gw, f,
+         [k IN $stat | { stat: k, value: stats[k] }] AS selected_stats
+
+    RETURN
+      p.player_name AS player,
+      s.season_name AS season,
+      gw.GW_number AS gameweek,
+      f.fixture_number AS fixture,
+      selected_stats
+  """
+}
+,
 
 "player_performance_season": {
     "intent": "player_performance",
@@ -413,6 +443,53 @@ QUERY_LIBRARY = {
     ORDER BY player
   """
 } ,
+
+"search_team": {
+  "intent": "search_player",
+  "entities": ["teams", "season"],
+  "cypher": """
+    // Find the season and team(s)
+    MATCH (s:Season)
+    WHERE s.season_name IN $season
+
+    MATCH (t:Team)
+    WHERE t.name IN $teams
+
+    // All fixtures in this season
+    MATCH (s)-[:HAS_GW]->(:Gameweek)-[:HAS_FIXTURE]->(f:Fixture)
+    WITH s, t, collect(DISTINCT f) AS seasonFixtures
+
+    // Find all players who appeared in any fixture in this season
+    UNWIND seasonFixtures AS sf
+    MATCH (p:Player)-[played:PLAYED_IN]->(sf)
+    WITH s, t, p, collect(DISTINCT sf) AS playerFixtures
+
+    // Count how many of these fixtures involve the target team
+    WITH s, t, p, playerFixtures,
+        size([x IN playerFixtures WHERE (x)-[:HAS_HOME_TEAM]->(t) OR (x)-[:HAS_AWAY_TEAM]->(t)]) AS fixtures_with_team,
+        size(playerFixtures) AS total_fixtures_played
+
+    // Keep only players whose majority of appearances in the season are with the team
+    WHERE fixtures_with_team > 0 AND fixtures_with_team * 2 >= total_fixtures_played
+
+    // Aggregate stats for these fixtures
+    MATCH (p)-[pl:PLAYED_IN]->(pf:Fixture)
+    WHERE pf IN playerFixtures
+
+
+    OPTIONAL MATCH (p)-[:PLAYS_AS]->(pos:Position)
+
+    WITH t, s, collect(DISTINCT {
+        player_name: p.player_name
+    }) AS players_info
+
+    RETURN t.name AS team,
+        s.season_name AS season,
+        players_info
+    ORDER BY team, season
+  """
+},
+
 "search_team_pos": {
   "intent": "search_team",
   "entities": ["teams", "season", "position"],
@@ -451,12 +528,11 @@ QUERY_LIBRARY = {
       AND fixtures_with_team * 2 >= total_fixtures_played
 
     RETURN
-      t.name AS team,
-      s.season_name AS season,
-      pos.name AS position_name,
-      collect(DISTINCT {
-        player_name: p.player_name
-      }) AS players_info
+    t.name AS team,
+    s.season_name AS season,
+    pos.name AS position_name,
+    p.player_name AS player_name
+
 
     ORDER BY team, season, position_name
   """

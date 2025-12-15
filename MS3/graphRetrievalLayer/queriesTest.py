@@ -30,11 +30,12 @@ except Exception as e:
     print("Neo4j connection failed:", e)
 
 
-intent = "search_team"
+intent = "player_performance"
 entities = {
-    "teams": ["Arsenal"],
+    "players": ["Mohamed Salah"],
+    "stat": ["assists" , "goals_scored"],
     "season": ["2022-23"],
-    "position": ["DEF"]
+    "gameweek": [1]
 }
 
 
