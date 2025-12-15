@@ -611,17 +611,22 @@ ORDER BY team, season
   "cypher": """
     MATCH (s:Season)
     WHERE s.season_name IN $season
+
     MATCH (s)-[:HAS_GW]->(:Gameweek)-[:HAS_FIXTURE]->(f:Fixture)
     MATCH (p:Player)-[stats:PLAYED_IN]->(f)
 
     UNWIND $stat AS stat_name
 
-    RETURN p.player_name AS player,
-           SUM(coalesce(stats[stat_name], 0)) AS total_value
-    ORDER BY total_value DESC
+    WITH p, stat_name, SUM(coalesce(stats[stat_name], 0)) AS total
+
+    RETURN 
+      p.player_name AS player,
+      {stat: stat_name, total: total} AS stat_total
+    ORDER BY stat_total.total DESC
     LIMIT 5
   """
-},
+}
+
 
 
 

@@ -30,7 +30,8 @@ load_dotenv()
 VALID_INTENTS = {
         "player_performance", "player_history", "compare_players", 
         "top_players_position", "team_analysis", "team_fixtures", 
-        "fixture_difficulty", "search_player", "search_team", "recommend_player"
+        "fixture_difficulty", "search_player", "search_team", "recommend_player",
+        "rank_players_by_stat"
     }
 
 INTENT_PROMPT = """
