@@ -32,12 +32,8 @@ PASSWORD = os.getenv("PASSWORD")
 # ---------------------------
 # MATRIX
 # ---------------------------
-def compute_metrics(prompt, answer, start_time, model_name):
+def compute_metrics(input, output, start_time, model_name):
     latency = round(time.time() - start_time, 3)
-
-    # Approx token counts (OK for academic evaluation)
-    prompt_tokens = len(prompt.split())
-    answer_tokens = len(answer.split())
 
     # Rough cost estimation (can be "Free tier")
     cost = "Free tier"
@@ -45,8 +41,8 @@ def compute_metrics(prompt, answer, start_time, model_name):
     return {
         "Model": model_name,
         "Latency (s)": latency,
-        "Prompt Tokens": prompt_tokens,
-        "Answer Tokens": answer_tokens,
+        "Prompt Tokens": input,
+        "Answer Tokens": output,
         "Estimated Cost": cost
     }
 
@@ -279,9 +275,14 @@ def models():
                     )
                     answer = response.text
 
+                    usage = response.usage_metadata
+                    input_tokens = usage.prompt_token_count
+                    output_tokens = usage.candidates_token_count
+
+
                     metrics = compute_metrics(
-                        structured_prompt,
-                        answer,
+                        input_tokens,
+                        output_tokens,
                         start_time,
                         "Gemini 2.5 Flash"
                     )
@@ -320,9 +321,14 @@ def models():
                     except Exception as e:
                         answer = f"Error with Mistral API: {e}"
 
+                    usage = response.usage
+                    input_tokens = usage.prompt_tokens
+                    output_tokens = usage.completion_tokens
+
+
                     metrics = compute_metrics(
-                        structured_prompt,
-                        answer,
+                        input_tokens,
+                        output_tokens,
                         start_time,
                         "Mistral Small"
                     )
@@ -359,9 +365,13 @@ def models():
                     except Exception as e:
                         answer = f"Error with Cohere API: {e}"
 
+                    tokens = response.meta.tokens
+                    input_tokens = int(tokens.input_tokens)
+                    output_tokens = int(tokens.output_tokens)
+
                     metrics = compute_metrics(
-                        structured_prompt,
-                        answer,
+                        input_tokens,
+                        output_tokens,
                         start_time,
                         "Cohere"
                     )
