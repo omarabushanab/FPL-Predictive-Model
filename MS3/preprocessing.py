@@ -47,6 +47,7 @@ Return ONLY one intent label from this list:
 - search_player
 - search_team
 - recommend_player
+- rank_players_by_stat
 
 User Query: "{}"
 
@@ -79,7 +80,7 @@ class FPLEncoderNER:
             "point": "total_points",
             "goals conceded": "goals_conceded",
             "conceded": "goals_conceded",
-            "form": "form",
+            " form": "form",
             "clean sheet": "clean_sheets",
             "clean sheets": "clean_sheets",
             "bonus": "bonus",
@@ -100,8 +101,7 @@ class FPLEncoderNER:
             "xa": "xA",
             "expected points": "upcoming_total_points",
             "upcoming total points": "upcoming_total_points",
-            "upcoming points": "upcoming_total_points",
-            "performance": "form"
+            "upcoming points": "upcoming_total_points"
         }
 
         # Position synonyms -> mapped to Position.name
@@ -112,7 +112,7 @@ class FPLEncoderNER:
             "GK": "GK",
             "gk": "GK",
             "defender": "DEF",
-            "DEf": "DEF",
+            "DEF": "DEF",
             "def": "DEF",
             "centre back": "DEF",
             "center back": "DEF",
