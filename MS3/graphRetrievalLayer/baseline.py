@@ -413,52 +413,56 @@ QUERY_LIBRARY = {
     ORDER BY player
   """
 } ,
-
-"search_team": {
+"search_team_pos": {
   "intent": "search_team",
-  "entities": ["teams", "season"],
+  "entities": ["teams", "season", "position"],
   "cypher": """
-    // Find the season and team(s)
+    // Match season
     MATCH (s:Season)
     WHERE s.season_name IN $season
 
+    // Match team
     MATCH (t:Team)
     WHERE t.name IN $teams
 
-    // All fixtures in this season
+    // Match fixtures in season
     MATCH (s)-[:HAS_GW]->(:Gameweek)-[:HAS_FIXTURE]->(f:Fixture)
-    WITH s, t, collect(DISTINCT f) AS seasonFixtures
 
-    // Find all players who appeared in any fixture in this season
-    UNWIND seasonFixtures AS sf
-    MATCH (p:Player)-[played:PLAYED_IN]->(sf)
-    WITH s, t, p, collect(DISTINCT sf) AS playerFixtures
+    // Match players AND bind position immediately
+    MATCH (p:Player)-[:PLAYED_IN]->(f)
+    MATCH (p)-[:PLAYS_AS]->(pos:Position)
+    WHERE pos.name IN $position
 
-    // Count how many of these fixtures involve the target team
-    WITH s, t, p, playerFixtures,
-        size([x IN playerFixtures WHERE (x)-[:HAS_HOME_TEAM]->(t) OR (x)-[:HAS_AWAY_TEAM]->(t)]) AS fixtures_with_team,
-        size(playerFixtures) AS total_fixtures_played
+    // Check if fixture involves the team
+    WITH s, t, pos, p,
+         CASE
+           WHEN (f)-[:HAS_HOME_TEAM]->(t)
+             OR (f)-[:HAS_AWAY_TEAM]->(t)
+           THEN 1 ELSE 0
+         END AS is_team_fixture
 
-    // Keep only players whose majority of appearances in the season are with the team
-    WHERE fixtures_with_team > 0 AND fixtures_with_team * 2 >= total_fixtures_played
+    // Aggregate per player (position-safe)
+    WITH s, t, pos, p,
+         sum(is_team_fixture) AS fixtures_with_team,
+         count(*) AS total_fixtures_played
 
-    // Aggregate stats for these fixtures
-    MATCH (p)-[pl:PLAYED_IN]->(pf:Fixture)
-    WHERE pf IN playerFixtures
+    // Player must mainly belong to the team
+    WHERE fixtures_with_team > 0
+      AND fixtures_with_team * 2 >= total_fixtures_played
 
-
-    OPTIONAL MATCH (p)-[:PLAYS_AS]->(pos:Position)
-
-    WITH t, s, collect(DISTINCT {
+    RETURN
+      t.name AS team,
+      s.season_name AS season,
+      pos.name AS position_name,
+      collect(DISTINCT {
         player_name: p.player_name
-    }) AS players_info
+      }) AS players_info
 
-    RETURN t.name AS team,
-        s.season_name AS season,
-        players_info
-    ORDER BY team, season
-
-    """
+    ORDER BY team, season, position_name
+  """
 }
+
+
+
 
 }

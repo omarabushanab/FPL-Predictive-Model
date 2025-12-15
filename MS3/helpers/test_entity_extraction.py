@@ -23,7 +23,7 @@ queries = [
     "In season 2022-23 show Bukayo Saka points in gameweek 8",
     "What were the total points scored by Marcus Rashford in gameweek 15 for the 2022-23 campaign?"
     "Provide the aggregated stats for Harry Kane during the 2022-23 season",
-    "How many total points did Bukayo Saka achieve in the 2022-23 season?",
+    "How many total points did Bukayo Saka achieve in the 2022/23 season chelseas's",
     "Summarize the season points and minutes for Virgil van Dijk in the 2022-23 campaign goals assists and compare Goalies Attackers Defenders Midfielders Forwards Manchester United manchester city Arsenal', 'Aston Villa', 'Bournemouth', 'Brentford', 'Brighton', 'Burnley', 'Chelsea', 'Crystal Palace', 'Everton', 'Fulham', 'Leeds', 'Leicester', 'Liverpool', 'Man City', 'Man Utd', 'Newcastle', 'Norwich', Nott'm Forest , 'Southampton', hotspurs Watford', 'West Ham', 'wolverhampton'"
 ] 
 
