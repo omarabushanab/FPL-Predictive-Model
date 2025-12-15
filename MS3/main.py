@@ -326,7 +326,6 @@ def models():
                         response = st.session_state.cohere_client.chat(
                             model=COHERE_MODEL,
                             message=structured_prompt,
-                            max_tokens=200
                         )
                         answer = response.text
                     except Exception as e:
