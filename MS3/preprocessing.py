@@ -47,6 +47,7 @@ Return ONLY one intent label from this list:
 - search_player
 - search_team
 - recommend_player
+- rank_players_by_stat
 
 User Query: "{}"
 
