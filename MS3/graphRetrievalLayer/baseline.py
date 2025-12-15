@@ -1,5 +1,7 @@
 QUERY_LIBRARY = {
 
+
+# done
 "player_performance_gw": {
     "intent": "player_performance",
     "entities": ["players", "season", "gameweek"] ,
@@ -20,6 +22,7 @@ QUERY_LIBRARY = {
     """
 },
 
+# done 
 "player_performance_gw": {
   "intent": "player_performance",
   "entities": ["players", "season", "gameweek", "stat"],
@@ -50,6 +53,7 @@ QUERY_LIBRARY = {
 }
 ,
 
+# done 
 "player_performance_season": {
     "intent": "player_performance",
     "entities": ["players", "season"],
@@ -71,6 +75,8 @@ QUERY_LIBRARY = {
     """
 },
 
+
+# done
 "player_performance_season_stat": {
   "intent": "player_performance",
   "entities": ["players", "season", "stat"],
@@ -89,6 +95,8 @@ QUERY_LIBRARY = {
     ORDER BY player, stat
   """
 } ,
+
+# done provide me with the history of stats for phil foden
 
 "player_history": {
   "intent": "player_history",
@@ -133,6 +141,8 @@ QUERY_LIBRARY = {
     ORDER BY player, season
   """
 },
+
+# done compare between salah and foden in season 2022-23
 
 "compare_players": {
   "intent": "compare_players",
@@ -179,53 +189,105 @@ QUERY_LIBRARY = {
   """
 },
 
+# done team analysis for arsenal in season 2022-23
+
 "team_analysis_season": {
   "intent": "team_analysis",
   "entities": ["teams", "season"],
   "cypher": """
     MATCH (t:Team)
-    WHERE t.name IN $teams
+WHERE t.name IN $teams
 
-    MATCH (t)<-[:HAS_HOME_TEAM|HAS_AWAY_TEAM]-(f:Fixture)
-          <-[:HAS_FIXTURE]-(:Gameweek)
-          <-[:HAS_GW]-(s:Season)
-    WHERE s.season_name IN $season
+MATCH (t)<-[:HAS_HOME_TEAM|HAS_AWAY_TEAM]-(f:Fixture)
+      <-[:HAS_FIXTURE]-(:Gameweek)
+      <-[:HAS_GW]-(s:Season)
+WHERE s.season_name IN $season
 
-    MATCH (p:Player)-[stats:PLAYED_IN]->(f)
+MATCH (p:Player)-[stats:PLAYED_IN]->(f)
 
-    WITH t, s, collect(properties(stats)) AS stats_list
 
-    RETURN t.name AS team,
-           s.season_name AS season,
-           reduce(result = {},
-                  st IN stats_list |
-                  {
-                    minutes:           coalesce(result.minutes, 0) + coalesce(st.minutes, 0),
-                    goals_scored:      coalesce(result.goals_scored, 0) + coalesce(st.goals_scored, 0),
-                    assists:           coalesce(result.assists, 0) + coalesce(st.assists, 0),
-                    total_points:      coalesce(result.total_points, 0) + coalesce(st.total_points, 0),
-                    bonus:             coalesce(result.bonus, 0) + coalesce(st.bonus, 0),
-                    clean_sheets:      coalesce(result.clean_sheets, 0) + coalesce(st.clean_sheets, 0),
-                    goals_conceded:    coalesce(result.goals_conceded, 0) + coalesce(st.goals_conceded, 0),
-                    own_goals:         coalesce(result.own_goals, 0) + coalesce(st.own_goals, 0),
-                    penalties_saved:   coalesce(result.penalties_saved, 0) + coalesce(st.penalties_saved, 0),
-                    penalties_missed:  coalesce(result.penalties_missed, 0) + coalesce(st.penalties_missed, 0),
-                    yellow_cards:      coalesce(result.yellow_cards, 0) + coalesce(st.yellow_cards, 0),
-                    red_cards:         coalesce(result.red_cards, 0) + coalesce(st.red_cards, 0),
-                    saves:             coalesce(result.saves, 0) + coalesce(st.saves, 0),
-                    bps:               coalesce(result.bps, 0) + coalesce(st.bps, 0),
-                    influence:         coalesce(result.influence, 0) + coalesce(st.influence, 0),
-                    creativity:        coalesce(result.creativity, 0) + coalesce(st.creativity, 0),
-                    threat:            coalesce(result.threat, 0) + coalesce(st.threat, 0),
-                    ict_index:         coalesce(result.ict_index, 0) + coalesce(st.ict_index, 0),
-                    form:              coalesce(result.form, 0) + coalesce(st.form, 0)
-                  }
-           ) AS aggregated_stats
+// --------------------------------------------------
+// 1) Aggregate ONCE per fixture
+// --------------------------------------------------
+WITH t, s, f,
+     sum(coalesce(stats.minutes, 0))            AS minutes,
+     sum(coalesce(stats.goals_scored, 0))       AS goals_scored,
+     sum(coalesce(stats.assists, 0))            AS assists,
+     sum(coalesce(stats.total_points, 0))       AS total_points,
+     sum(coalesce(stats.bonus, 0))               AS bonus,
+     sum(coalesce(stats.own_goals, 0))            AS own_goals,
+     sum(coalesce(stats.penalties_saved, 0))     AS penalties_saved,
+     sum(coalesce(stats.penalties_missed, 0))    AS penalties_missed,
+     sum(coalesce(stats.yellow_cards, 0))        AS yellow_cards,
+     sum(coalesce(stats.red_cards, 0))           AS red_cards,
+     sum(coalesce(stats.saves, 0))               AS saves,
+     sum(coalesce(stats.bps, 0))                  AS bps,
+     sum(coalesce(stats.influence, 0))           AS influence,
+     sum(coalesce(stats.creativity, 0))          AS creativity,
+     sum(coalesce(stats.threat, 0))               AS threat,
+     sum(coalesce(stats.ict_index, 0))           AS ict_index,
+     sum(coalesce(stats.form, 0))                 AS form,
 
-    ORDER BY team, season
+     // Defensive stats (DEDUPLICATED per fixture)
+     max(coalesce(stats.goals_conceded, 0))      AS goals_conceded,
+     max(coalesce(stats.clean_sheets, 0))        AS clean_sheets
+
+
+// --------------------------------------------------
+// 2) Aggregate per season
+// --------------------------------------------------
+WITH t, s,
+     sum(minutes)           AS minutes,
+     sum(goals_scored)      AS goals_scored,
+     sum(assists)           AS assists,
+     sum(total_points)      AS total_points,
+     sum(bonus)             AS bonus,
+     sum(clean_sheets)      AS clean_sheets,
+     sum(goals_conceded)    AS goals_conceded,
+     sum(own_goals)         AS own_goals,
+     sum(penalties_saved)   AS penalties_saved,
+     sum(penalties_missed)  AS penalties_missed,
+     sum(yellow_cards)      AS yellow_cards,
+     sum(red_cards)         AS red_cards,
+     sum(saves)             AS saves,
+     sum(bps)               AS bps,
+     sum(influence)         AS influence,
+     sum(creativity)        AS creativity,
+     sum(threat)            AS threat,
+     sum(ict_index)         AS ict_index,
+     sum(form)              AS form
+
+RETURN
+  t.name AS team,
+  s.season_name AS season,
+  {
+    minutes: minutes,
+    goals_scored: goals_scored,
+    assists: assists,
+    total_points: total_points,
+    bonus: bonus,
+    clean_sheets: clean_sheets,
+    goals_conceded: goals_conceded,
+    own_goals: own_goals,
+    penalties_saved: penalties_saved,
+    penalties_missed: penalties_missed,
+    yellow_cards: yellow_cards,
+    red_cards: red_cards,
+    saves: saves,
+    bps: bps,
+    influence: influence,
+    creativity: creativity,
+    threat: threat,
+    ict_index: ict_index,
+    form: form
+  } AS aggregated_stats
+
+ORDER BY team, season
+
   """
 },
 
+# done team analysis for arsenal in season 2022-23 with specific stats
   "team_analysis_stat": {
   "intent": "team_analysis",
   "entities": ["teams", "stat"],
@@ -275,7 +337,7 @@ QUERY_LIBRARY = {
   """
 },
 
-
+# done recommend players who play as DEF in season 2022-23 based on total points
 
 "recommend_player_position_season": {
   "intent": "recommend_player",
