@@ -187,7 +187,7 @@ def models():
     if "cohere_client" not in st.session_state:
         st.session_state.cohere_client = cohere.Client(API_COHERE_KEY)
 
-    # Unified message history
+    # Unified message history (now includes KG context)
     if "messages" not in st.session_state:
         st.session_state.messages = []
     
@@ -210,11 +210,32 @@ def models():
 
 
     # ---------------------------
-    # DISPLAY CHAT HISTORY
+    # DISPLAY CHAT HISTORY (WITH KG CONTEXT)
     # ---------------------------
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+            if msg["role"] == "user":
+                st.markdown(msg["content"])
+            else:
+                # Display assistant message
+                st.markdown(msg["content"])
+                
+                # Display KG context if available
+                if "kg_context" in msg:
+                    with st.expander("📊 View KG-Retrieved Context (Before LLM)", expanded=False):
+                        st.markdown(
+                            """
+                            This section shows the **raw information retrieved from the Knowledge Graph**
+                            *before* it is processed by the LLM.
+                            """
+                        )
+                        display_baseline_results(msg["kg_context"]["baseline"])
+                        display_embedding_results(msg["kg_context"]["embedding"])
+                
+                # Display metrics if available
+                if "metrics" in msg:
+                    with st.expander("📈 Model Metrics"):
+                        st.json(msg["metrics"])
 
 
     # ---------------------------
@@ -239,21 +260,6 @@ def models():
         baseline,feature = RAG.send_user_input_to_backend(query,conn,embedding_choice)
         print(f"this is the features returned to main.py {feature}")
         print(f"this is the baseline returned to main.py {baseline}")
-
-        # ---------------------------
-        # KG TRANSPARENCY SECTION
-        # ---------------------------
-        with st.expander("📊 View KG-Retrieved Context (Before LLM)", expanded=False):
-
-            st.markdown(
-                """
-                This section shows the **raw information retrieved from the Knowledge Graph**
-                *before* it is processed by the LLM.
-                """
-            )
-
-            display_baseline_results(baseline)
-            display_embedding_results(feature)
 
        
         # Build RAG context + prompt
@@ -281,6 +287,17 @@ def models():
                     )
 
                 st.write(answer)
+
+                # 📊 KG CONTEXT DISPLAY
+                with st.expander("📊 View KG-Retrieved Context (Before LLM)", expanded=False):
+                    st.markdown(
+                        """
+                        This section shows the **raw information retrieved from the Knowledge Graph**
+                        *before* it is processed by the LLM.
+                        """
+                    )
+                    display_baseline_results(baseline)
+                    display_embedding_results(feature)
 
                 # 📊 METRICS DISPLAY
                 with st.expander("📈 Model Metrics"):
@@ -312,6 +329,17 @@ def models():
 
                 st.write(answer)
 
+                # 📊 KG CONTEXT DISPLAY
+                with st.expander("📊 View KG-Retrieved Context (Before LLM)", expanded=False):
+                    st.markdown(
+                        """
+                        This section shows the **raw information retrieved from the Knowledge Graph**
+                        *before* it is processed by the LLM.
+                        """
+                    )
+                    display_baseline_results(baseline)
+                    display_embedding_results(feature)
+
                 with st.expander("📈 Model Metrics"):
                     st.json(metrics)
 
@@ -340,10 +368,30 @@ def models():
 
                 st.write(answer)
 
+                # 📊 KG CONTEXT DISPLAY
+                with st.expander("📊 View KG-Retrieved Context (Before LLM)", expanded=False):
+                    st.markdown(
+                        """
+                        This section shows the **raw information retrieved from the Knowledge Graph**
+                        *before* it is processed by the LLM.
+                        """
+                    )
+                    display_baseline_results(baseline)
+                    display_embedding_results(feature)
+
                 with st.expander("📈 Model Metrics"):
                     st.json(metrics)
 
 
-        # Save assistant response
-        st.session_state.messages.append({"role": "assistant", "content": answer})
+        # Save assistant response WITH KG context and metrics
+        st.session_state.messages.append({
+            "role": "assistant", 
+            "content": answer,
+            "kg_context": {
+                "baseline": baseline,
+                "embedding": feature
+            },
+            "metrics": metrics
+        })
+        
 models()
