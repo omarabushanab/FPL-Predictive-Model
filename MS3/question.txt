@@ -39,6 +39,55 @@ compare_players
   "search_team": "Show Arsenal's results in the 2022/23 season."
 }
 
+def compute_metrics(input, output, start_time, model_name):
+    latency = round(time.time() - start_time, 3)
+
+    # Rough cost estimation (can be "Free tier")
+    cost = "Free tier"
+
+    return {
+        "Model": model_name,
+        "Latency (s)": latency,
+        "Prompt Tokens": input,
+        "Answer Tokens": output,
+        "Estimated Cost": cost
+    }
+gemini
+                    answer = response.text
+                    usage = response.usage_metadata
+                    input_tokens = usage.prompt_token_count
+                    output_tokens = usage.candidates_token_count
 
 
+                    metrics = compute_metrics(
+                        input_tokens,
+                        output_tokens,
+                        start_time,
+                        "Gemini 2.5 Flash"
+                    )
 
+mistral
+
+                    usage = response.usage
+                    input_tokens = usage.prompt_tokens
+                    output_tokens = usage.completion_tokens
+
+
+                    metrics = compute_metrics(
+                        input_tokens,
+                        output_tokens,
+                        start_time,
+                        "Mistral Small"
+                    )
+
+cohere
+                    tokens = response.meta.tokens
+                    input_tokens = int(tokens.input_tokens)
+                    output_tokens = int(tokens.output_tokens)
+
+                    metrics = compute_metrics(
+                        input_tokens,
+                        output_tokens,
+                        start_time,
+                        "Cohere"
+                    )
