@@ -373,10 +373,6 @@ class FPLEncoderNER:
                 if stat not in entities["stat"]:
                     entities["stat"].append(stat)
 
-        # Default stat - only add if no stats found
-        if not entities["stat"]:
-            entities["stat"].append("total_points")
-
         return entities
     """
     Domain-Specific NER for FPL theme.
