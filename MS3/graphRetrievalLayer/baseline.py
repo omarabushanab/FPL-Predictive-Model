@@ -1,7 +1,7 @@
 QUERY_LIBRARY = {
 
 
-# done
+# done what is the performance of phil foden in gameweek 5 of season 2022-23
 "player_performance_gw": {
     "intent": "player_performance",
     "entities": ["players", "season", "gameweek"] ,
@@ -405,6 +405,7 @@ ORDER BY team, season
 
 # ===================== Fixture difficulty queries =====================
 
+# done fixture difficulty for arsenal in season 2022-23 gw 3
   "fixture_difficulty": {
     "intent": "fixture_difficulty", 
     "entities": ["teams", "season", "gameweek"],
@@ -474,6 +475,8 @@ ORDER BY team, season
 
 
 # ===================== search_player =====================
+
+# done search for player phil foden
 
 "search_player": {
   "intent": "search_player",
@@ -551,6 +554,8 @@ ORDER BY team, season
     ORDER BY team, season
   """
 },
+
+# done search for arsenal defenders in season 2022-23
 
 "search_team_pos": {
   "intent": "search_team",
