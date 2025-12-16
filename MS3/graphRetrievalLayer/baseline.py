@@ -287,27 +287,6 @@ ORDER BY team, season
   """
 },
 
-# done team analysis for arsenal in season 2022-23 with specific stats
-  "team_analysis_stat": {
-  "intent": "team_analysis",
-  "entities": ["teams", "stat"],
-  "cypher": """
-    MATCH (t:Team)
-    WHERE t.name IN $teams
-
-    MATCH (t)<-[:HAS_HOME_TEAM|HAS_AWAY_TEAM]-(f:Fixture)
-    MATCH (p:Player)-[stats:PLAYED_IN]->(f)
-
-    UNWIND $stat AS stat_name
-
-    RETURN t.name AS team,
-           stat_name AS stat,
-           SUM(stats[stat_name]) AS total_value
-    ORDER BY team, stat
-  """
-},
-
-
 "team_fixtures_season": {
   "intent": "team_fixtures",
   "entities": ["teams", "season"],
