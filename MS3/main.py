@@ -479,18 +479,12 @@ def models():
     inject_custom_css()
 
     # Main header
-    st.markdown("""
-    <div class="main-header">
-        <h1>⚽ FPL Graph-RAG Assistant</h1>
-        <p>Next-Generation Knowledge Graph Intelligence • Powered by Multi-Model AI</p>
-    </div>
-    """, unsafe_allow_html=True)
 
     # ---------------------------
     # SIDEBAR CONFIGURATION
     # ---------------------------
     with st.sidebar:
-        st.markdown("## ⚙️ Configuration")
+        st.markdown("## ⚙️ Settings")
         st.markdown("---")
         
         # Model Selection
@@ -519,35 +513,10 @@ def models():
         
         st.markdown("---")
         
-        # Quick Stats
-        st.markdown("### 📊 Session Stats")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Messages", len(st.session_state.get('messages', [])))
-        with col2:
-            st.metric("Model", model_choice.split()[0])
-        
-        st.markdown("---")
-        
         # About section
-        with st.expander("ℹ️ About this Assistant", expanded=False):
+        with st.expander("ℹ️ About", expanded=False):
             st.markdown("""
-            **FPL Graph-RAG** combines the power of:
-            
-            🔹 **Knowledge Graphs** for structured data  
-            🔹 **Vector Embeddings** for semantic search  
-            🔹 **Large Language Models** for natural responses
-            
-            This creates an AI that doesn't just answer—it *understands* your FPL data.
-            
-            ---
-            
-            **Features:**
-            - Real-time KG querying
-            - Multi-model AI support
-            - Semantic similarity search
-            - Context-aware responses
-            - Performance metrics tracking
+            e2fl tany b2a
             """)
         
         st.markdown("---")
@@ -593,7 +562,6 @@ def models():
                 I'll search through the knowledge graph to give you accurate, context-aware answers.
             </p>
             <p style="text-align: center; margin-top: 1.5rem; color: rgba(255,255,255,0.6);">
-                💡 Try: "Who scored the most goals this season?" or "Compare Salah and Haaland performance"
             </p>
         </div>
         """, unsafe_allow_html=True)
