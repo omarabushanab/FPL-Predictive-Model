@@ -298,11 +298,35 @@ ORDER BY team, season
     MATCH (t)<-[:HAS_HOME_TEAM|HAS_AWAY_TEAM]-(f:Fixture)
     MATCH (p:Player)-[stats:PLAYED_IN]->(f)
 
-    UNWIND $stat AS stat_name
+    // Aggregate ONCE per fixture
+    WITH t, f,
+        sum(coalesce(stats.minutes, 0))          AS minutes,
+        sum(coalesce(stats.goals_scored, 0))     AS goals_scored,
+        sum(coalesce(stats.assists, 0))          AS assists,
+        sum(coalesce(stats.total_points, 0))     AS total_points,
+        sum(coalesce(stats.bonus, 0))             AS bonus,
+        max(coalesce(stats.clean_sheets, 0))     AS clean_sheets,
+        max(coalesce(stats.goals_conceded, 0))   AS goals_conceded
 
-    RETURN t.name AS team,
-           stat_name AS stat,
-           SUM(stats[stat_name]) AS total_value
+    // Turn fixture stats into key-value rows
+    UNWIND [
+      {stat: "minutes", value: minutes},
+      {stat: "goals_scored", value: goals_scored},
+      {stat: "assists", value: assists},
+      {stat: "total_points", value: total_points},
+      {stat: "bonus", value: bonus},
+      {stat: "clean_sheets", value: clean_sheets},
+      {stat: "goals_conceded", value: goals_conceded}
+    ] AS stat_row
+
+    // Filter requested stats
+    WHERE stat_row.stat IN $stat
+
+    // Aggregate per team
+    RETURN
+      t.name AS team,
+      stat_row.stat AS stat,
+      sum(stat_row.value) AS total_value
     ORDER BY team, stat
   """
 },
