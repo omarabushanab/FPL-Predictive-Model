@@ -32,12 +32,8 @@ PASSWORD = os.getenv("PASSWORD")
 # ---------------------------
 # MATRIX
 # ---------------------------
-def compute_metrics(prompt, answer, start_time, model_name):
+def compute_metrics(input, output, start_time, model_name):
     latency = round(time.time() - start_time, 3)
-
-    # Approx token counts (OK for academic evaluation)
-    prompt_tokens = len(prompt.split())
-    answer_tokens = len(answer.split())
 
     # Rough cost estimation (can be "Free tier")
     cost = "Free tier"
@@ -45,8 +41,8 @@ def compute_metrics(prompt, answer, start_time, model_name):
     return {
         "Model": model_name,
         "Latency (s)": latency,
-        "Prompt Tokens": prompt_tokens,
-        "Answer Tokens": answer_tokens,
+        "Prompt Tokens": input,
+        "Answer Tokens": output,
         "Estimated Cost": cost
     }
 
@@ -187,7 +183,7 @@ def models():
     if "cohere_client" not in st.session_state:
         st.session_state.cohere_client = cohere.Client(API_COHERE_KEY)
 
-    # Unified message history
+    # Unified message history (now includes KG context)
     if "messages" not in st.session_state:
         st.session_state.messages = []
     
@@ -210,11 +206,32 @@ def models():
 
 
     # ---------------------------
-    # DISPLAY CHAT HISTORY
+    # DISPLAY CHAT HISTORY (WITH KG CONTEXT)
     # ---------------------------
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+            if msg["role"] == "user":
+                st.markdown(msg["content"])
+            else:
+                # Display assistant message
+                st.markdown(msg["content"])
+                
+                # Display KG context if available
+                if "kg_context" in msg:
+                    with st.expander("📊 View KG-Retrieved Context (Before LLM)", expanded=False):
+                        st.markdown(
+                            """
+                            This section shows the **raw information retrieved from the Knowledge Graph**
+                            *before* it is processed by the LLM.
+                            """
+                        )
+                        display_baseline_results(msg["kg_context"]["baseline"])
+                        display_embedding_results(msg["kg_context"]["embedding"])
+                
+                # Display metrics if available
+                if "metrics" in msg:
+                    with st.expander("📈 Model Metrics"):
+                        st.json(msg["metrics"])
 
 
     # ---------------------------
@@ -240,21 +257,6 @@ def models():
         print(f"this is the features returned to main.py {feature}")
         print(f"this is the baseline returned to main.py {baseline}")
 
-        # ---------------------------
-        # KG TRANSPARENCY SECTION
-        # ---------------------------
-        with st.expander("📊 View KG-Retrieved Context (Before LLM)", expanded=False):
-
-            st.markdown(
-                """
-                This section shows the **raw information retrieved from the Knowledge Graph**
-                *before* it is processed by the LLM.
-                """
-            )
-
-            display_baseline_results(baseline)
-            display_embedding_results(feature)
-
        
         # Build RAG context + prompt
         context = build_context(baseline, feature)
@@ -273,14 +275,30 @@ def models():
                     )
                     answer = response.text
 
+                    usage = response.usage_metadata
+                    input_tokens = usage.prompt_token_count
+                    output_tokens = usage.candidates_token_count
+
+
                     metrics = compute_metrics(
-                        structured_prompt,
-                        answer,
+                        input_tokens,
+                        output_tokens,
                         start_time,
                         "Gemini 2.5 Flash"
                     )
 
                 st.write(answer)
+
+                # 📊 KG CONTEXT DISPLAY
+                with st.expander("📊 View KG-Retrieved Context (Before LLM)", expanded=False):
+                    st.markdown(
+                        """
+                        This section shows the **raw information retrieved from the Knowledge Graph**
+                        *before* it is processed by the LLM.
+                        """
+                    )
+                    display_baseline_results(baseline)
+                    display_embedding_results(feature)
 
                 # 📊 METRICS DISPLAY
                 with st.expander("📈 Model Metrics"):
@@ -303,14 +321,30 @@ def models():
                     except Exception as e:
                         answer = f"Error with Mistral API: {e}"
 
+                    usage = response.usage
+                    input_tokens = usage.prompt_tokens
+                    output_tokens = usage.completion_tokens
+
+
                     metrics = compute_metrics(
-                        structured_prompt,
-                        answer,
+                        input_tokens,
+                        output_tokens,
                         start_time,
                         "Mistral Small"
                     )
 
                 st.write(answer)
+
+                # 📊 KG CONTEXT DISPLAY
+                with st.expander("📊 View KG-Retrieved Context (Before LLM)", expanded=False):
+                    st.markdown(
+                        """
+                        This section shows the **raw information retrieved from the Knowledge Graph**
+                        *before* it is processed by the LLM.
+                        """
+                    )
+                    display_baseline_results(baseline)
+                    display_embedding_results(feature)
 
                 with st.expander("📈 Model Metrics"):
                     st.json(metrics)
@@ -331,19 +365,43 @@ def models():
                     except Exception as e:
                         answer = f"Error with Cohere API: {e}"
 
+                    tokens = response.meta.tokens
+                    input_tokens = int(tokens.input_tokens)
+                    output_tokens = int(tokens.output_tokens)
+
                     metrics = compute_metrics(
-                        structured_prompt,
-                        answer,
+                        input_tokens,
+                        output_tokens,
                         start_time,
                         "Cohere"
                     )
 
                 st.write(answer)
 
+                # 📊 KG CONTEXT DISPLAY
+                with st.expander("📊 View KG-Retrieved Context (Before LLM)", expanded=False):
+                    st.markdown(
+                        """
+                        This section shows the **raw information retrieved from the Knowledge Graph**
+                        *before* it is processed by the LLM.
+                        """
+                    )
+                    display_baseline_results(baseline)
+                    display_embedding_results(feature)
+
                 with st.expander("📈 Model Metrics"):
                     st.json(metrics)
 
 
-        # Save assistant response
-        st.session_state.messages.append({"role": "assistant", "content": answer})
+        # Save assistant response WITH KG context and metrics
+        st.session_state.messages.append({
+            "role": "assistant", 
+            "content": answer,
+            "kg_context": {
+                "baseline": baseline,
+                "embedding": feature
+            },
+            "metrics": metrics
+        })
+        
 models()
