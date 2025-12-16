@@ -513,10 +513,13 @@ def models():
         
         st.markdown("---")
         
-        # About section
         with st.expander("ℹ️ About", expanded=False):
+            try:
+                st.image("image.png", use_container_width=True)
+            except:
+                pass
             st.markdown("""
-            e2fl tany b2a
+            إقفل بقي
             """)
         
         st.markdown("---")
