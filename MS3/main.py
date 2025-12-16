@@ -479,11 +479,6 @@ def models():
     inject_custom_css()
 
     # Main header
-    st.markdown("""
-    <div class="main-header">
-        <h1>⚽ FPL Graph-RAG Assistant</h1>
-    </div>
-    """, unsafe_allow_html=True)
 
     # ---------------------------
     # SIDEBAR CONFIGURATION
