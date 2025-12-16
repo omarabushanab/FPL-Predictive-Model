@@ -191,7 +191,7 @@ def models():
     # SIDEBAR CONFIGURATION
     # ---------------------------
     with st.sidebar:
-        st.header("⚙️ Configuration")
+        st.header("⚙️ Settings")
         st.markdown("---")
         
         # Model Selection
@@ -220,12 +220,7 @@ def models():
         # Additional Info
         with st.expander("ℹ️ About", expanded=False):
             st.markdown("""
-            **FPL Graph-RAG** combines:
-            - 🔗 Knowledge Graph retrieval
-            - 🧠 Semantic embeddings
-            - 🤖 LLM reasoning
-            
-            Ask questions about Fantasy Premier League data!
+            E2fl tany ba2a
             """)
         
         # Clear Chat Button
