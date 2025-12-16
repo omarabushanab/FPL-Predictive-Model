@@ -2,25 +2,51 @@ QUERY_LIBRARY = {
 
 
 # done what is the performance of phil foden in gameweek 5 of season 2022-23
-"player_performance_gw": {
-    "intent": "player_performance",
-    "entities": ["players", "season", "gameweek"] ,
-    "cypher": """
-        MATCH (p:Player)
-        WHERE p.player_name IN $players
-        MATCH (s:Season)
-        WHERE s.season_name IN $season
-        MATCH (s)-[:HAS_GW]->(gw:Gameweek)
-        WHERE gw.GW_number IN $gameweek
-        MATCH (gw)-[:HAS_FIXTURE]->(f:Fixture)
-        MATCH (p)-[stats:PLAYED_IN]->(f)
-        RETURN p.player_name AS player,
-               s.season_name AS season,
-               gw.GW_number AS gameweek,
-               f.fixture_number AS fixture,
-               stats
-    """
-},
+# done 
+"player_performance_season_gw": {
+  "intent": "player_performance",
+  "entities": ["players", "season"],
+  "cypher": """
+    // Match selected players
+    MATCH (p:Player)
+    WHERE p.player_name IN $players
+
+    // Match season and its gameweeks
+    MATCH (s:Season)
+    WHERE s.season_name IN $season
+
+    MATCH (s)-[:HAS_GW]->(gw:Gameweek)
+    MATCH (gw)-[:HAS_FIXTURE]->(f:Fixture)
+
+    // Player participation in fixtures
+    MATCH (p)-[stats:PLAYED_IN]->(f)
+
+    RETURN
+        p.player_name AS player_name,
+        s.season_name AS season,
+        gw.GW_number AS gameweek,
+
+        // GW aggregated stats
+        SUM(stats.total_points) AS total_points,
+        SUM(stats.goals_scored) AS goals,
+        SUM(stats.assists) AS assists,
+        SUM(stats.minutes) AS minutes,
+        SUM(stats.bonus) AS bonus,
+        SUM(stats.clean_sheets) AS clean_sheets,
+        SUM(stats.goals_conceded) AS goals_conceded,
+        SUM(stats.yellow_cards) AS yellow_cards,
+        SUM(stats.red_cards) AS red_cards,
+        SUM(stats.saves) AS saves,
+        SUM(stats.bps) AS bps,
+        SUM(stats.influence) AS influence,
+        SUM(stats.creativity) AS creativity,
+        SUM(stats.threat) AS threat,
+        AVG(stats.ict_index) AS ict_index,
+        AVG(stats.form) AS form
+
+    ORDER BY p.player_name, gw.GW_number
+  """
+} ,
 
 # done 
 "player_performance_gw": {
@@ -50,29 +76,6 @@ QUERY_LIBRARY = {
       f.fixture_number AS fixture,
       selected_stats
   """
-}
-,
-
-# done 
-"player_performance_season": {
-    "intent": "player_performance",
-    "entities": ["players", "season"],
-    "cypher": """
-        MATCH (p:Player)
-        WHERE p.player_name IN $players
-
-        MATCH (p)-[stats:PLAYED_IN]->(f:Fixture)
-        WHERE f.season IN $season
-
-        RETURN 
-            p.player_name AS player_name,
-            f.fixture_number AS fixture,
-            f.season AS season,
-            SUM(stats.total_points) AS total_points,
-            SUM(stats.goals_scored) AS goals,
-            SUM(stats.assists) AS assists,
-            SUM(stats.minutes) AS minutes
-    """
 },
 
 
