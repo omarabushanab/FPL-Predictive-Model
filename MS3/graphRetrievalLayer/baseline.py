@@ -287,51 +287,6 @@ ORDER BY team, season
   """
 },
 
-# done team analysis for arsenal in season 2022-23 with specific stats
-  "team_analysis_stat": {
-  "intent": "team_analysis",
-  "entities": ["teams", "stat"],
-  "cypher": """
-    MATCH (t:Team)
-    WHERE t.name IN $teams
-
-    MATCH (t)<-[:HAS_HOME_TEAM|HAS_AWAY_TEAM]-(f:Fixture)
-    MATCH (p:Player)-[stats:PLAYED_IN]->(f)
-
-    // Aggregate ONCE per fixture
-    WITH t, f,
-        sum(coalesce(stats.minutes, 0))          AS minutes,
-        sum(coalesce(stats.goals_scored, 0))     AS goals_scored,
-        sum(coalesce(stats.assists, 0))          AS assists,
-        sum(coalesce(stats.total_points, 0))     AS total_points,
-        sum(coalesce(stats.bonus, 0))             AS bonus,
-        max(coalesce(stats.clean_sheets, 0))     AS clean_sheets,
-        max(coalesce(stats.goals_conceded, 0))   AS goals_conceded
-
-    // Turn fixture stats into key-value rows
-    UNWIND [
-      {stat: "minutes", value: minutes},
-      {stat: "goals_scored", value: goals_scored},
-      {stat: "assists", value: assists},
-      {stat: "total_points", value: total_points},
-      {stat: "bonus", value: bonus},
-      {stat: "clean_sheets", value: clean_sheets},
-      {stat: "goals_conceded", value: goals_conceded}
-    ] AS stat_row
-
-    // Filter requested stats
-    WHERE stat_row.stat IN $stat
-
-    // Aggregate per team
-    RETURN
-      t.name AS team,
-      stat_row.stat AS stat,
-      sum(stat_row.value) AS total_value
-    ORDER BY team, stat
-  """
-},
-
-
 "team_fixtures_season": {
   "intent": "team_fixtures",
   "entities": ["teams", "season"],
