@@ -1,9 +1,11 @@
+import time
 import os
 from dotenv import load_dotenv
+import pandas as pd
+
 from google import genai
 from mistralai import Mistral
 import cohere
-import pandas as pd
 
 import RAG
 from helpers.neo4j_connection import Neo4jConnection
@@ -40,12 +42,27 @@ cohere_client = cohere.Client(API_COHERE_KEY)
 conn = Neo4jConnection(URI, USERNAME, PASSWORD)
 
 # --------------------------------------------------
-# FIXED QUESTION
+# FIXED TEST CASE
 # --------------------------------------------------
 QUESTION = "Provide me with the history of stats for Phil Foden"
 
+EXPECTED_FACTS = [
+    "2021-22",
+    "2022-23",
+    "goals",
+    "assists",
+    "total points"
+]
+
 # --------------------------------------------------
-# GET KG CONTEXT ONCE
+# SIMPLE CORRECTNESS FUNCTION
+# --------------------------------------------------
+def correctness_score(answer, expected_facts):
+    hits = sum(1 for fact in expected_facts if fact.lower() in answer.lower())
+    return round(hits / len(expected_facts), 2)
+
+# --------------------------------------------------
+# BUILD KG CONTEXT ONCE
 # --------------------------------------------------
 baseline, embedding = RAG.send_user_input_to_backend(
     QUESTION, conn, EMBEDDING_MODEL
@@ -57,65 +74,71 @@ prompt = build_prompt(QUESTION, context)
 # --------------------------------------------------
 # RUN MODELS
 # --------------------------------------------------
-answers = {}
+results = []
 
-# Gemini
+# -------- GEMINI --------
+start = time.time()
 response = gemini_client.models.generate_content(
     model=GEMINI_MODEL,
     contents=prompt
 )
-answers["Gemini 2.5 Flash"] = response.text
+latency = round(time.time() - start, 3)
 
-# Mistral
+usage = response.usage_metadata
+answer = response.text
+
+results.append({
+    "model": "Gemini 2.5 Flash",
+    "latency_s": latency,
+    "input_tokens": usage.prompt_token_count,
+    "output_tokens": usage.candidates_token_count,
+    "correctness": correctness_score(answer, EXPECTED_FACTS)
+})
+
+# -------- MISTRAL --------
+start = time.time()
 response = mistral_client.chat.complete(
     model=MISTRAL_MODEL,
     messages=[{"role": "user", "content": prompt}],
     stream=False
 )
-answers["Mistral Small"] = response.choices[0].message.content
+latency = round(time.time() - start, 3)
 
-# Cohere
+usage = response.usage
+answer = response.choices[0].message.content
+
+results.append({
+    "model": "Mistral Small",
+    "latency_s": latency,
+    "input_tokens": usage.prompt_tokens,
+    "output_tokens": usage.completion_tokens,
+    "correctness": correctness_score(answer, EXPECTED_FACTS)
+})
+
+# -------- COHERE --------
+start = time.time()
 response = cohere_client.chat(
     model=COHERE_MODEL,
     message=prompt
 )
-answers["Cohere"] = response.text
+latency = round(time.time() - start, 3)
+
+tokens = response.meta.tokens
+answer = response.text
+
+results.append({
+    "model": "Cohere",
+    "latency_s": latency,
+    "input_tokens": int(tokens.input_tokens),
+    "output_tokens": int(tokens.output_tokens),
+    "correctness": correctness_score(answer, EXPECTED_FACTS)
+})
 
 # --------------------------------------------------
-# MANUAL QUALITATIVE EVALUATION
+# RESULTS
 # --------------------------------------------------
-print("\n=== MODEL ANSWERS ===\n")
-
-evaluations = []
-
-for model, answer in answers.items():
-    print(f"\n--- {model} ---\n")
-    print(answer)
-    print("\nRate this answer from 1 (poor) to 5 (excellent):")
-
-    quality = int(input("Answer Quality: "))
-    relevance = int(input("Relevance: "))
-    naturalness = int(input("Naturalness: "))
-    correctness = int(input("Correctness: "))
-
-    evaluations.append({
-        "model": model,
-        "answer_quality": quality,
-        "relevance": relevance,
-        "naturalness": naturalness,
-        "correctness": correctness
-    })
-
-# --------------------------------------------------
-# CREATE QUALITATIVE MATRIX
-# --------------------------------------------------
-df = pd.DataFrame(evaluations)
-
-print("\n=== QUALITATIVE EVALUATION MATRIX ===\n")
+df = pd.DataFrame(results)
+print("\n=== MODEL COMPARISON RESULTS ===\n")
 print(df)
-
-print("\n=== AVERAGE SCORES ===\n")
-print(df.groupby("model").mean())
-
-print("\nBest model (by average score):")
-print(df.groupby("model").mean().mean(axis=1).idxmax())
+print("\nBest model (by correctness):")
+print(df.sort_values("correctness", ascending=False).iloc[0])
