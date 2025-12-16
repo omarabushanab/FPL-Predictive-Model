@@ -151,12 +151,12 @@ class FPLEncoderNER:
         q = query.lower()
 
         entities = {
-            "players": [],      # array
-            "teams": [],        # array
-            "positions": [],    # array
-            "season": [],       # array
-            "gameweek": [],     # array
-            "stat": []          # array
+            "players": [],      
+            "teams": [],        
+            "positions": [],    
+            "season": [],       
+            "gameweek": [],     
+            "stat": []          
         }
 
         # Get all words from query (for whole-word matching)
