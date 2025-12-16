@@ -8,9 +8,11 @@ from dotenv import load_dotenv
 import RAG
 from helpers.neo4j_connection import Neo4jConnection
 import time
+from neo4j.graph import Relationship
 
 # Load the environment variables from the .env file
 load_dotenv()
+
 # ---------------------------
 # CONFIG
 # ---------------------------
@@ -28,16 +30,13 @@ USERNAME = os.getenv("DB-USERNAME")
 PASSWORD = os.getenv("PASSWORD")
 
 
-
 # ---------------------------
-# MATRIX
+# METRICS
 # ---------------------------
 def compute_metrics(input, output, start_time, model_name):
     latency = round(time.time() - start_time, 3)
-
-    # Rough cost estimation (can be "Free tier")
     cost = "Free tier"
-
+    
     return {
         "Model": model_name,
         "Latency (s)": latency,
@@ -46,13 +45,10 @@ def compute_metrics(input, output, start_time, model_name):
         "Estimated Cost": cost
     }
 
-# baseline
-# <Record p.player_name='Aaron Connolly' stats=<Relationship element_id='5:6b9eba7c-0fbf-4c8b-b7cd-2e626e7f569d:1179949699440837391' nodes=(<Node element_id='4:6b9eba7c-0fbf-4c8b-b7cd-2e626e7f569d:783' labels=frozenset() properties={}>, <Node element_id='4:6b9eba7c-0fbf-4c8b-b7cd-2e626e7f569d:12' labels=frozenset() properties={}>) type='PLAYED_IN' properties={'goals_scored': 0, 'bps': 0, 'bonus': 0, 'minutes': 0, 'own_goals': 0, 'clean_sheets': 0, 'goals_conceded': 0, 'total_points': 0, 'penalties_missed': 0, 'red_cards': 0, 'yellow_cards': 0, 'influence': 0.0, 'saves': 0, 'form': 0.0, 'assists': 0, 'threat': 0, 'creativity': 0.0, 'ict_index': 0.0, 'penalties_saved': 0}>>
+
 # ---------------------------
 # BUILD CONTEXT FROM BASELINE + EMBEDDINGS
 # ---------------------------
-from neo4j.graph import Relationship
-
 def build_context(baseline_records, embedding_records):
     context = ""
 
@@ -64,16 +60,12 @@ def build_context(baseline_records, embedding_records):
 
         for record in baseline_records:
             for k, v in record.items():
-
-                # ✅ Proper Neo4j relationship detection
                 if isinstance(v, Relationship):
                     context += f"- {k} ({v.type}):\n"
                     for stat_key, stat_val in v._properties.items():
                         context += f"    • {stat_key}: {stat_val}\n"
-
                 else:
                     context += f"- {k}: {v}\n"
-
             context += "\n"
 
     # ---------------- EMBEDDINGS ----------------
@@ -89,10 +81,8 @@ def build_context(baseline_records, embedding_records):
     return context
 
 
-
-
 # ---------------------------
-# NICE DISPLAY HELPERS (KG TRANSPARENCY)
+# DISPLAY HELPERS
 # ---------------------------
 def display_baseline_results(baseline_records):
     st.subheader("🔗 Baseline KG Results")
@@ -104,15 +94,12 @@ def display_baseline_results(baseline_records):
     for i, record in enumerate(baseline_records, 1):
         with st.expander(f"Baseline Result #{i}", expanded=False):
             for key, value in record.items():
-
-                # Relationship (PLAYED_IN etc.)
                 if hasattr(value, "type") and hasattr(value, "properties"):
                     st.markdown(f"**Relationship:** `{value.type}`")
                     st.json(value.properties)
-
-                # Normal attributes (player, season, gameweek, etc.)
                 else:
                     st.markdown(f"**{key}:** {value}")
+
 
 def display_embedding_results(embedding_records):
     st.subheader("🧠 Embedding (Semantic) KG Results")
@@ -126,14 +113,11 @@ def display_embedding_results(embedding_records):
             if "labels" in item:
                 st.markdown("**Labels:**")
                 st.code(", ".join(item["labels"]))
-
             if "properties" in item:
                 st.markdown("**Properties:**")
                 st.json(item["properties"])
-
             if "similarity_score" in item:
                 st.markdown(f"**Similarity Score:** `{item['similarity_score']:.4f}`")
-
 
 
 # ---------------------------
@@ -166,151 +150,209 @@ Answer:
 
 
 # ---------------------------
-# INIT CLIENTS
+# ERROR HANDLING WRAPPER
+# ---------------------------
+def handle_model_error(error, model_name):
+    """Return user-friendly error messages"""
+    error_str = str(error).lower()
+    
+    if "rate limit" in error_str or "quota" in error_str:
+        return f"⚠️ **Rate Limit Exceeded**: The {model_name} API has reached its rate limit. Please wait a moment and try again."
+    elif "overloaded" in error_str or "overwhelmed" in error_str or "503" in error_str:
+        return f"⚠️ **Server Overloaded**: The {model_name} servers are currently experiencing high traffic. Please try again in a few moments."
+    elif "timeout" in error_str:
+        return f"⚠️ **Request Timeout**: The {model_name} API took too long to respond. Please try again."
+    elif "authentication" in error_str or "api key" in error_str or "401" in error_str:
+        return f"⚠️ **Authentication Error**: There's an issue with the {model_name} API key. Please check your configuration."
+    elif "connection" in error_str or "network" in error_str:
+        return f"⚠️ **Connection Error**: Unable to connect to {model_name}. Please check your internet connection."
+    else:
+        return f"⚠️ **Error with {model_name}**: {str(error)}\n\nPlease try again or select a different model."
+
+
+# ---------------------------
+# MAIN APP
 # ---------------------------
 def models():
-    st.title("⚽ FPL Graph-RAG Assistant (Gemini + Mistral + Cohere)")
+    # Page configuration
+    st.set_page_config(
+        page_title="FPL Graph-RAG Assistant",
+        page_icon="⚽",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
 
-    # Gemini client
+    # Main title
+    st.title("⚽ FPL Graph-RAG Assistant")
+    st.markdown("*Powered by Knowledge Graphs & Multi-Model AI*")
+    st.divider()
+
+    # ---------------------------
+    # SIDEBAR CONFIGURATION
+    # ---------------------------
+    with st.sidebar:
+        st.header("⚙️ Configuration")
+        st.markdown("---")
+        
+        # Model Selection
+        st.subheader("🤖 Language Model")
+        model_choice = st.selectbox(
+            "Choose LLM",
+            ["Gemini 2.5 Flash", "Mistral Small", "Cohere"],
+            help="Select the AI model to generate responses"
+        )
+        
+        st.markdown("---")
+        
+        # Embedding Model Selection
+        st.subheader("🧠 Embedding Model")
+        embedding_choice = st.selectbox(
+            "Choose Embedder",
+            [
+                "sentence-transformers/all-MiniLM-L6-v2",
+                "sentence-transformers/all-mpnet-base-v2"
+            ],
+            help="Select the model for semantic similarity search"
+        )
+        
+        st.markdown("---")
+        
+        # Additional Info
+        with st.expander("ℹ️ About", expanded=False):
+            st.markdown("""
+            **FPL Graph-RAG** combines:
+            - 🔗 Knowledge Graph retrieval
+            - 🧠 Semantic embeddings
+            - 🤖 LLM reasoning
+            
+            Ask questions about Fantasy Premier League data!
+            """)
+        
+        # Clear Chat Button
+        st.markdown("---")
+        if st.button("🗑️ Clear Chat History", use_container_width=True):
+            st.session_state.messages = []
+            st.rerun()
+
+    # ---------------------------
+    # INITIALIZE CLIENTS
+    # ---------------------------
     if "gemini_client" not in st.session_state:
-        st.session_state.gemini_client = genai.Client(api_key=API_GEMINI_KEY)
+        try:
+            st.session_state.gemini_client = genai.Client(api_key=API_GEMINI_KEY)
+        except Exception as e:
+            st.sidebar.error(f"Failed to initialize Gemini: {e}")
 
-    # Mistral client
     if "mistral_client" not in st.session_state:
-        st.session_state.mistral_client = Mistral(api_key=API_MISTRAL_KEY)
+        try:
+            st.session_state.mistral_client = Mistral(api_key=API_MISTRAL_KEY)
+        except Exception as e:
+            st.sidebar.error(f"Failed to initialize Mistral: {e}")
 
-    # Cohere client
     if "cohere_client" not in st.session_state:
-        st.session_state.cohere_client = cohere.Client(API_COHERE_KEY)
+        try:
+            st.session_state.cohere_client = cohere.Client(API_COHERE_KEY)
+        except Exception as e:
+            st.sidebar.error(f"Failed to initialize Cohere: {e}")
 
-    # Unified message history (now includes KG context)
     if "messages" not in st.session_state:
         st.session_state.messages = []
+
+    # ---------------------------
+    # DISPLAY CHAT HISTORY
+    # ---------------------------
+    chat_container = st.container()
     
-
-
-
-    # ---------------------------
-    # UI MODEL DROPDOWN
-    # ---------------------------
-    model_choice = st.selectbox(
-        "Choose Model",
-        ["Gemini 2.5 Flash", "Mistral Small", "Cohere"]
-    )
-
-    embedding_choice = st.selectbox(
-        "Choose Embedding Model",
-        ["sentence-transformers/all-MiniLM-L6-v2", "sentence-transformers/all-mpnet-base-v2"]
-    )
-    
-
-
-    # ---------------------------
-    # DISPLAY CHAT HISTORY (WITH KG CONTEXT)
-    # ---------------------------
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            if msg["role"] == "user":
-                st.markdown(msg["content"])
-            else:
-                # Display assistant message
-                st.markdown(msg["content"])
-                
-                # Display KG context if available
-                if "kg_context" in msg:
-                    with st.expander("📊 View KG-Retrieved Context (Before LLM)", expanded=False):
-                        st.markdown(
-                            """
-                            This section shows the **raw information retrieved from the Knowledge Graph**
-                            *before* it is processed by the LLM.
-                            """
-                        )
-                        display_baseline_results(msg["kg_context"]["baseline"])
-                        display_embedding_results(msg["kg_context"]["embedding"])
-                
-                # Display metrics if available
-                if "metrics" in msg:
-                    with st.expander("📈 Model Metrics"):
-                        st.json(msg["metrics"])
-
+    with chat_container:
+        for msg in st.session_state.messages:
+            with st.chat_message(msg["role"]):
+                if msg["role"] == "user":
+                    st.markdown(msg["content"])
+                else:
+                    st.markdown(msg["content"])
+                    
+                    # Display KG context if available
+                    if "kg_context" in msg:
+                        with st.expander("📊 View KG-Retrieved Context", expanded=False):
+                            st.markdown("*Raw information from Knowledge Graph before LLM processing*")
+                            display_baseline_results(msg["kg_context"]["baseline"])
+                            display_embedding_results(msg["kg_context"]["embedding"])
+                    
+                    # Display metrics if available
+                    if "metrics" in msg:
+                        with st.expander("📈 Model Metrics"):
+                            col1, col2, col3, col4 = st.columns(4)
+                            with col1:
+                                st.metric("Latency", f"{msg['metrics']['Latency (s)']}s")
+                            with col2:
+                                st.metric("Prompt Tokens", msg['metrics']['Prompt Tokens'])
+                            with col3:
+                                st.metric("Answer Tokens", msg['metrics']['Answer Tokens'])
+                            with col4:
+                                st.metric("Cost", msg['metrics']['Estimated Cost'])
 
     # ---------------------------
     # HANDLE USER INPUT
     # ---------------------------
     query = st.chat_input("Ask something about FPL...")
 
-
-
     if query:
-        # 1️⃣ SAVE USER MESSAGE IMMEDIATELY
-        st.session_state.messages.append(
-            {"role": "user", "content": query}
-        )
-
-        # 2️⃣ RENDER USER MESSAGE IMMEDIATELY
+        # Save and render user message
+        st.session_state.messages.append({"role": "user", "content": query})
+        
         with st.chat_message("user"):
             st.write(query)
 
+        # Retrieve from Knowledge Graph
+        try:
+            with st.spinner("🔍 Searching Knowledge Graph..."):
+                conn = Neo4jConnection(URI, USERNAME, PASSWORD)
+                baseline, feature = RAG.send_user_input_to_backend(query, conn, embedding_choice)
+                
+            # Build context and prompt
+            context = build_context(baseline, feature)
+            structured_prompt = build_prompt(query, context)
 
-        conn = Neo4jConnection(URI,USERNAME,PASSWORD)
-        baseline,feature = RAG.send_user_input_to_backend(query,conn,embedding_choice)
-        print(f"this is the features returned to main.py {feature}")
-        print(f"this is the baseline returned to main.py {baseline}")
-
-       
-        # Build RAG context + prompt
-        context = build_context(baseline, feature)
-        print(f"this is the context {context}")
-        structured_prompt = build_prompt(query, context)
-
-        # GEMINI
-        if model_choice == "Gemini 2.5 Flash":
+        except Exception as e:
             with st.chat_message("assistant"):
-                with st.spinner("Gemini Thinking..."):
+                error_msg = f"⚠️ **Knowledge Graph Error**: Unable to retrieve data from the database.\n\nError: {str(e)}"
+                st.error(error_msg)
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": error_msg
+                })
+            st.stop()
+
+        # Generate response based on selected model
+        with st.chat_message("assistant"):
+            answer = None
+            metrics = None
+            
+            # GEMINI
+            if model_choice == "Gemini 2.5 Flash":
+                with st.spinner("🤖 Gemini is thinking..."):
                     start_time = time.time()
+                    try:
+                        response = st.session_state.gemini_client.models.generate_content(
+                            model=GEMINI_MODEL,
+                            contents=structured_prompt
+                        )
+                        answer = response.text
+                        usage = response.usage_metadata
+                        metrics = compute_metrics(
+                            usage.prompt_token_count,
+                            usage.candidates_token_count,
+                            start_time,
+                            "Gemini 2.5 Flash"
+                        )
+                    except Exception as e:
+                        answer = handle_model_error(e, "Gemini")
+                        st.error(answer)
 
-                    response = st.session_state.gemini_client.models.generate_content(
-                        model=GEMINI_MODEL,
-                        contents=structured_prompt
-                    )
-                    answer = response.text
-
-                    usage = response.usage_metadata
-                    input_tokens = usage.prompt_token_count
-                    output_tokens = usage.candidates_token_count
-
-
-                    metrics = compute_metrics(
-                        input_tokens,
-                        output_tokens,
-                        start_time,
-                        "Gemini 2.5 Flash"
-                    )
-
-                st.write(answer)
-
-                # 📊 KG CONTEXT DISPLAY
-                with st.expander("📊 View KG-Retrieved Context (Before LLM)", expanded=False):
-                    st.markdown(
-                        """
-                        This section shows the **raw information retrieved from the Knowledge Graph**
-                        *before* it is processed by the LLM.
-                        """
-                    )
-                    display_baseline_results(baseline)
-                    display_embedding_results(feature)
-
-                # 📊 METRICS DISPLAY
-                with st.expander("📈 Model Metrics"):
-                    st.json(metrics)
-
-
-        # MISTRAL
-        elif model_choice == "Mistral Small":
-            with st.chat_message("assistant"):
-                with st.spinner("Mistral Thinking..."):
+            # MISTRAL
+            elif model_choice == "Mistral Small":
+                with st.spinner("🤖 Mistral is thinking..."):
                     start_time = time.time()
-
                     try:
                         response = st.session_state.mistral_client.chat.complete(
                             model=MISTRAL_MODEL,
@@ -318,90 +360,72 @@ def models():
                             stream=False
                         )
                         answer = response.choices[0].message.content
+                        usage = response.usage
+                        metrics = compute_metrics(
+                            usage.prompt_tokens,
+                            usage.completion_tokens,
+                            start_time,
+                            "Mistral Small"
+                        )
                     except Exception as e:
-                        answer = f"Error with Mistral API: {e}"
+                        answer = handle_model_error(e, "Mistral")
+                        st.error(answer)
 
-                    usage = response.usage
-                    input_tokens = usage.prompt_tokens
-                    output_tokens = usage.completion_tokens
-
-
-                    metrics = compute_metrics(
-                        input_tokens,
-                        output_tokens,
-                        start_time,
-                        "Mistral Small"
-                    )
-
-                st.write(answer)
-
-                # 📊 KG CONTEXT DISPLAY
-                with st.expander("📊 View KG-Retrieved Context (Before LLM)", expanded=False):
-                    st.markdown(
-                        """
-                        This section shows the **raw information retrieved from the Knowledge Graph**
-                        *before* it is processed by the LLM.
-                        """
-                    )
-                    display_baseline_results(baseline)
-                    display_embedding_results(feature)
-
-                with st.expander("📈 Model Metrics"):
-                    st.json(metrics)
-
-
-        # COHERE
-        else:
-            with st.chat_message("assistant"):
-                with st.spinner("Cohere Thinking..."):
+            # COHERE
+            else:
+                with st.spinner("🤖 Cohere is thinking..."):
                     start_time = time.time()
-
                     try:
                         response = st.session_state.cohere_client.chat(
                             model=COHERE_MODEL,
                             message=structured_prompt,
                         )
                         answer = response.text
+                        tokens = response.meta.tokens
+                        metrics = compute_metrics(
+                            int(tokens.input_tokens),
+                            int(tokens.output_tokens),
+                            start_time,
+                            "Cohere"
+                        )
                     except Exception as e:
-                        answer = f"Error with Cohere API: {e}"
+                        answer = handle_model_error(e, "Cohere")
+                        st.error(answer)
 
-                    tokens = response.meta.tokens
-                    input_tokens = int(tokens.input_tokens)
-                    output_tokens = int(tokens.output_tokens)
-
-                    metrics = compute_metrics(
-                        input_tokens,
-                        output_tokens,
-                        start_time,
-                        "Cohere"
-                    )
-
-                st.write(answer)
-
-                # 📊 KG CONTEXT DISPLAY
-                with st.expander("📊 View KG-Retrieved Context (Before LLM)", expanded=False):
-                    st.markdown(
-                        """
-                        This section shows the **raw information retrieved from the Knowledge Graph**
-                        *before* it is processed by the LLM.
-                        """
-                    )
+            # Display answer if successful
+            if answer and not answer.startswith("⚠️"):
+                st.markdown(answer)
+                
+                # Display KG context
+                with st.expander("📊 View KG-Retrieved Context", expanded=False):
+                    st.markdown("*Raw information from Knowledge Graph before LLM processing*")
                     display_baseline_results(baseline)
                     display_embedding_results(feature)
+                
+                # Display metrics
+                if metrics:
+                    with st.expander("📈 Model Metrics"):
+                        col1, col2, col3, col4 = st.columns(4)
+                        with col1:
+                            st.metric("Latency", f"{metrics['Latency (s)']}s")
+                        with col2:
+                            st.metric("Prompt Tokens", metrics['Prompt Tokens'])
+                        with col3:
+                            st.metric("Answer Tokens", metrics['Answer Tokens'])
+                        with col4:
+                            st.metric("Cost", metrics['Estimated Cost'])
 
-                with st.expander("📈 Model Metrics"):
-                    st.json(metrics)
+            # Save assistant response
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": answer,
+                "kg_context": {
+                    "baseline": baseline,
+                    "embedding": feature
+                } if answer and not answer.startswith("⚠️") else None,
+                "metrics": metrics
+            })
 
 
-        # Save assistant response WITH KG context and metrics
-        st.session_state.messages.append({
-            "role": "assistant", 
-            "content": answer,
-            "kg_context": {
-                "baseline": baseline,
-                "embedding": feature
-            },
-            "metrics": metrics
-        })
-        
-models()
+if __name__ == "__main__":
+    models()
