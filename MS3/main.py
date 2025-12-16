@@ -518,16 +518,6 @@ def models():
         
         st.markdown("---")
         
-        # Quick Stats
-        st.markdown("### 📊 Session Stats")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Messages", len(st.session_state.get('messages', [])))
-        with col2:
-            st.metric("Model", model_choice.split()[0])
-        
-        st.markdown("---")
-        
         # About section
         with st.expander("ℹ️ About", expanded=False):
             st.markdown("""
