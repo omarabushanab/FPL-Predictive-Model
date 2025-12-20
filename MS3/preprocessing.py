@@ -1,4 +1,4 @@
-from turtle import st
+import streamlit as st
 from cohere import Client
 from sentence_transformers import SentenceTransformer
 import re

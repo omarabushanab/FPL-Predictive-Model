@@ -1,4 +1,4 @@
-from turtle import st
+import streamlit as st
 from dotenv import load_dotenv
 import sys
 import os

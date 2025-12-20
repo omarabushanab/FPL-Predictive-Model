@@ -1,5 +1,5 @@
 import os
-from turtle import st
+import streamlit as st
 from dotenv import load_dotenv
 from google import genai
 from mistralai import Mistral

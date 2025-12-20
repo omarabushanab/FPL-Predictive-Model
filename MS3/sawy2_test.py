@@ -1,6 +1,6 @@
 import time
 import os
-from turtle import st
+import streamlit as st
 from dotenv import load_dotenv
 import pandas as pd
 
