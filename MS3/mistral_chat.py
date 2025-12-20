@@ -5,8 +5,8 @@ from dotenv import load_dotenv
 
 # Load the environment variables from the .env file
 load_dotenv() 
-MISTRAL_MODEL = os.getenv("MISTRAL_MODEL")
-API_MISTRAL_KEY = os.getenv("MISTRAL_API_KEY")
+MISTRAL_MODEL = os.getenv("MISTRAL_MODEL") or st.secrets["MISTRAL_MODEL"]
+API_MISTRAL_KEY = os.getenv("MISTRAL_API_KEY") or st.secrets["MISTRAL_API_KEY"]
 
 mistral_api_key =API_MISTRAL_KEY
 if not mistral_api_key:

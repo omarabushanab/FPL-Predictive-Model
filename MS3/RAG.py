@@ -1,5 +1,6 @@
 import sys
 import os
+from turtle import st
 
 from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
@@ -163,9 +164,9 @@ def send_user_input_to_backend(user_input,conn,embedding_choice):
 
 
 load_dotenv()
-URI = os.getenv("URI")
-USERNAME = os.getenv("DB-USERNAME")
-PASSWORD = os.getenv("PASSWORD")
+URI = os.getenv("URI") or st.secrets["URI"]
+USERNAME = os.getenv("DB-USERNAME") or st.secrets["DB-USERNAME"]
+PASSWORD = os.getenv("PASSWORD") or st.secrets["PASSWORD"]
 print(f"this is the URI: {URI}, username: {USERNAME}, password: {PASSWORD}")
 
 conn = Neo4jConnection(URI,USERNAME,PASSWORD)

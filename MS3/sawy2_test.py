@@ -1,5 +1,6 @@
 import time
 import os
+from turtle import st
 from dotenv import load_dotenv
 import pandas as pd
 
@@ -17,18 +18,18 @@ from main import build_prompt
 # --------------------------------------------------
 load_dotenv()
 
-GEMINI_MODEL = os.getenv("GEMINI_MODEL")
-API_GEMINI_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL") or st.secrets["GEMINI_MODEL"]
+API_GEMINI_KEY = os.getenv("GEMINI_API_KEY") or st.secrets["GEMINI_API_KEY"]
 
-MISTRAL_MODEL = os.getenv("MISTRAL_MODEL")
-API_MISTRAL_KEY = os.getenv("MISTRAL_API_KEY")
+MISTRAL_MODEL = os.getenv("MISTRAL_MODEL") or st.secrets["MISTRAL_MODEL"]
+API_MISTRAL_KEY = os.getenv("MISTRAL_API_KEY") or st.secrets["MISTRAL_API_KEY"]
 
-COHERE_MODEL = os.getenv("COHERE_MODEL")
-API_COHERE_KEY = os.getenv("COHERE_API_KEY")
+COHERE_MODEL = os.getenv("COHERE_MODEL") or st.secrets["COHERE_MODEL"]
+API_COHERE_KEY = os.getenv("COHERE_API_KEY") or st.secrets["COHERE_API_KEY"]
 
-URI = os.getenv("URI")
-USERNAME = os.getenv("DB-USERNAME")
-PASSWORD = os.getenv("PASSWORD")
+URI = os.getenv("URI") or st.secrets["URI"]
+USERNAME = os.getenv("DB-USERNAME") or st.secrets["DB-USERNAME"]
+PASSWORD = os.getenv("PASSWORD") or st.secrets["PASSWORD"]
 
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 

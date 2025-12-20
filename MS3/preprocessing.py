@@ -1,3 +1,4 @@
+from turtle import st
 from cohere import Client
 from sentence_transformers import SentenceTransformer
 import re
@@ -402,9 +403,9 @@ class FPLEncoderNER:
     
 def intent_classification(user_input, valid_intent= VALID_INTENTS):
     # Get model and API key from .env file
-    COHERE_API_KEY = os.getenv("COHERE_API_KEY")
+    COHERE_API_KEY = os.getenv("COHERE_API_KEY") or st.secrets["COHERE_API_KEY"]
     # Ensure a default model name is available if the .env file is missing COHERE_MODEL
-    model_name = os.getenv("COHERE_MODEL")
+    model_name = os.getenv("COHERE_MODEL") or st.secrets["COHERE_MODEL"]
 
     client = Client(api_key=COHERE_API_KEY)
 

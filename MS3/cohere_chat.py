@@ -8,9 +8,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Get model and API key from .env file
-COHERE_API_KEY = os.getenv("COHERE_API_KEY")
+COHERE_API_KEY = os.getenv("COHERE_API_KEY") or st.secrets["COHERE_API_KEY"]
 # Ensure a default model name is available if the .env file is missing COHERE_MODEL
-DEFAULT_MODEL = os.getenv("COHERE_MODEL") 
+DEFAULT_MODEL = os.getenv("COHERE_MODEL") or st.secrets["COHERE_MODEL"]
 
 st.title("💬 Cohere Chat App")
 st.caption(f"Model: {DEFAULT_MODEL}")

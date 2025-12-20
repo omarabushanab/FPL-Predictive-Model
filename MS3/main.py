@@ -16,18 +16,19 @@ load_dotenv()
 # ---------------------------
 # CONFIG
 # ---------------------------
-GEMINI_MODEL = os.getenv("GEMINI_MODEL")
-API_GEMINI_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL") or st.secrets["GEMINI_MODEL"]
+API_GEMINI_KEY = os.getenv("GEMINI_API_KEY") or st.secrets["GEMINI_API_KEY"]
 
-MISTRAL_MODEL = os.getenv("MISTRAL_MODEL")
-API_MISTRAL_KEY = os.getenv("MISTRAL_API_KEY")
 
-COHERE_MODEL = os.getenv("COHERE_MODEL")
-API_COHERE_KEY = os.getenv("COHERE_API_KEY")
+MISTRAL_MODEL = os.getenv("MISTRAL_MODEL") or st.secrets["MISTRAL_MODEL"]
+API_MISTRAL_KEY = os.getenv("MISTRAL_API_KEY") or st.secrets["MISTRAL_API_KEY"]
 
-URI = os.getenv("URI")
-USERNAME = os.getenv("DB-USERNAME")
-PASSWORD = os.getenv("PASSWORD")
+COHERE_MODEL = os.getenv("COHERE_MODEL") or st.secrets["COHERE_MODEL"]
+API_COHERE_KEY = os.getenv("COHERE_API_KEY") or st.secrets["COHERE_API_KEY"]
+
+URI = os.getenv("URI") or st.secrets["URI"]
+USERNAME = os.getenv("DB-USERNAME") or st.secrets["DB-USERNAME"]
+PASSWORD = os.getenv("PASSWORD") or st.secrets["PASSWORD"]
 
 
 # ---------------------------
@@ -605,134 +606,141 @@ def models():
     query = st.chat_input("⚽ Ask anything about FPL...")
 
     if query:
+        answer = None
         # Save and render user message
         st.session_state.messages.append({"role": "user", "content": query})
         
         with st.chat_message("user"):
             st.markdown(query)
 
-        # Retrieve from Knowledge Graph
-        try:
-            with st.spinner("🔍 Querying Knowledge Graph..."):
-                conn = Neo4jConnection(URI, USERNAME, PASSWORD)
-                baseline, feature = RAG.send_user_input_to_backend(query, conn, embedding_choice)
-                
-            # Build context and prompt
-            context = build_context(baseline, feature)
-            structured_prompt = build_prompt(query, context)
+        # i want to check if the query contains the word hi
+        if "hi" in query.lower().split():
+            answer = "Hi there"
+            st.markdown(answer)
 
-        except Exception as e:
+        else:
+        # Retrieve from Knowledge Graph
+            try:
+                with st.spinner("🔍 Querying Knowledge Graph..."):
+                    conn = Neo4jConnection(URI, USERNAME, PASSWORD)
+                    baseline, feature = RAG.send_user_input_to_backend(query, conn, embedding_choice)
+                    
+                # Build context and prompt
+                context = build_context(baseline, feature)
+                structured_prompt = build_prompt(query, context)
+
+            except Exception as e:
+                with st.chat_message("assistant"):
+                    error_msg = f"⚠️ **Knowledge Graph Error**: Unable to retrieve data.\n\n`{str(e)}`"
+                    st.error(error_msg)
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": error_msg
+                    })
+                st.stop()
+
+            # Generate response based on selected model
             with st.chat_message("assistant"):
-                error_msg = f"⚠️ **Knowledge Graph Error**: Unable to retrieve data.\n\n`{str(e)}`"
-                st.error(error_msg)
+                answer = None
+                metrics = None
+                
+                # GEMINI
+                if model_choice == "Gemini 2.5 Flash":
+                    with st.spinner("🤖 Gemini is analyzing..."):
+                        start_time = time.time()
+                        try:
+                            response = st.session_state.gemini_client.models.generate_content(
+                                model=GEMINI_MODEL,
+                                contents=structured_prompt
+                            )
+                            answer = response.text
+                            usage = response.usage_metadata
+                            metrics = compute_metrics(
+                                usage.prompt_token_count,
+                                usage.candidates_token_count,
+                                start_time,
+                                "Gemini 2.5 Flash"
+                            )
+                        except Exception as e:
+                            answer = handle_model_error(e, "Gemini")
+                            st.error(answer)
+
+                # MISTRAL
+                elif model_choice == "Mistral Small":
+                    with st.spinner("🤖 Mistral is processing..."):
+                        start_time = time.time()
+                        try:
+                            response = st.session_state.mistral_client.chat.complete(
+                                model=MISTRAL_MODEL,
+                                messages=[{"role": "user", "content": structured_prompt}],
+                                stream=False
+                            )
+                            answer = response.choices[0].message.content
+                            usage = response.usage
+                            metrics = compute_metrics(
+                                usage.prompt_tokens,
+                                usage.completion_tokens,
+                                start_time,
+                                "Mistral Small"
+                            )
+                        except Exception as e:
+                            answer = handle_model_error(e, "Mistral")
+                            st.error(answer)
+
+                # COHERE
+                else:
+                    with st.spinner("🤖 Cohere is thinking..."):
+                        start_time = time.time()
+                        try:
+                            response = st.session_state.cohere_client.chat(
+                                model=COHERE_MODEL,
+                                message=structured_prompt,
+                            )
+                            answer = response.text
+                            tokens = response.meta.tokens
+                            metrics = compute_metrics(
+                                int(tokens.input_tokens),
+                                int(tokens.output_tokens),
+                                start_time,
+                                "Cohere"
+                            )
+                        except Exception as e:
+                            answer = handle_model_error(e, "Cohere")
+                            st.error(answer)
+
+                # Display answer if successful
+                if answer and not answer.startswith("⚠️"):
+                    st.markdown(answer)
+                    
+                    # Display KG context
+                    with st.expander("📊 Knowledge Graph Context", expanded=False):
+                        st.markdown("*Raw data retrieved from the Knowledge Graph*")
+                        display_baseline_results(baseline)
+                        display_embedding_results(feature)
+                    
+                    # Display metrics
+                    if metrics:
+                        with st.expander("📈 Performance Metrics", expanded=False):
+                            col1, col2, col3, col4 = st.columns(4)
+                            with col1:
+                                st.metric("⚡ Latency", f"{metrics['Latency (s)']}s")
+                            with col2:
+                                st.metric("📝 Prompt", metrics['Prompt Tokens'])
+                            with col3:
+                                st.metric("💬 Response", metrics['Answer Tokens'])
+                            with col4:
+                                st.metric("💰 Cost", metrics['Estimated Cost'])
+
+                # Save assistant response
                 st.session_state.messages.append({
                     "role": "assistant",
-                    "content": error_msg
+                    "content": answer,
+                    "kg_context": {
+                        "baseline": baseline,
+                        "embedding": feature
+                    } if answer and not answer.startswith("⚠️") else None,
+                    "metrics": metrics
                 })
-            st.stop()
-
-        # Generate response based on selected model
-        with st.chat_message("assistant"):
-            answer = None
-            metrics = None
-            
-            # GEMINI
-            if model_choice == "Gemini 2.5 Flash":
-                with st.spinner("🤖 Gemini is analyzing..."):
-                    start_time = time.time()
-                    try:
-                        response = st.session_state.gemini_client.models.generate_content(
-                            model=GEMINI_MODEL,
-                            contents=structured_prompt
-                        )
-                        answer = response.text
-                        usage = response.usage_metadata
-                        metrics = compute_metrics(
-                            usage.prompt_token_count,
-                            usage.candidates_token_count,
-                            start_time,
-                            "Gemini 2.5 Flash"
-                        )
-                    except Exception as e:
-                        answer = handle_model_error(e, "Gemini")
-                        st.error(answer)
-
-            # MISTRAL
-            elif model_choice == "Mistral Small":
-                with st.spinner("🤖 Mistral is processing..."):
-                    start_time = time.time()
-                    try:
-                        response = st.session_state.mistral_client.chat.complete(
-                            model=MISTRAL_MODEL,
-                            messages=[{"role": "user", "content": structured_prompt}],
-                            stream=False
-                        )
-                        answer = response.choices[0].message.content
-                        usage = response.usage
-                        metrics = compute_metrics(
-                            usage.prompt_tokens,
-                            usage.completion_tokens,
-                            start_time,
-                            "Mistral Small"
-                        )
-                    except Exception as e:
-                        answer = handle_model_error(e, "Mistral")
-                        st.error(answer)
-
-            # COHERE
-            else:
-                with st.spinner("🤖 Cohere is thinking..."):
-                    start_time = time.time()
-                    try:
-                        response = st.session_state.cohere_client.chat(
-                            model=COHERE_MODEL,
-                            message=structured_prompt,
-                        )
-                        answer = response.text
-                        tokens = response.meta.tokens
-                        metrics = compute_metrics(
-                            int(tokens.input_tokens),
-                            int(tokens.output_tokens),
-                            start_time,
-                            "Cohere"
-                        )
-                    except Exception as e:
-                        answer = handle_model_error(e, "Cohere")
-                        st.error(answer)
-
-            # Display answer if successful
-            if answer and not answer.startswith("⚠️"):
-                st.markdown(answer)
-                
-                # Display KG context
-                with st.expander("📊 Knowledge Graph Context", expanded=False):
-                    st.markdown("*Raw data retrieved from the Knowledge Graph*")
-                    display_baseline_results(baseline)
-                    display_embedding_results(feature)
-                
-                # Display metrics
-                if metrics:
-                    with st.expander("📈 Performance Metrics", expanded=False):
-                        col1, col2, col3, col4 = st.columns(4)
-                        with col1:
-                            st.metric("⚡ Latency", f"{metrics['Latency (s)']}s")
-                        with col2:
-                            st.metric("📝 Prompt", metrics['Prompt Tokens'])
-                        with col3:
-                            st.metric("💬 Response", metrics['Answer Tokens'])
-                        with col4:
-                            st.metric("💰 Cost", metrics['Estimated Cost'])
-
-            # Save assistant response
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": answer,
-                "kg_context": {
-                    "baseline": baseline,
-                    "embedding": feature
-                } if answer and not answer.startswith("⚠️") else None,
-                "metrics": metrics
-            })
 
 
 if __name__ == "__main__":

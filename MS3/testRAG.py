@@ -1,5 +1,6 @@
 import sys
 import os
+from turtle import st
 
 from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
@@ -210,10 +211,10 @@ def semantic_search_nodes(user_input, model_name, conn, top_k=7):
 
 def main():
     load_dotenv()
-    URI = os.getenv("URI")
-    USERNAME = os.getenv("DB-USERNAME")
-    PASSWORD = os.getenv("PASSWORD")
-    
+    URI = os.getenv("URI") or st.secrets["URI"]
+    USERNAME = os.getenv("DB-USERNAME") or st.secrets["DB-USERNAME"]
+    PASSWORD = os.getenv("PASSWORD") or st.secrets["PASSWORD"]
+
     conn = Neo4jConnection(URI, USERNAME, PASSWORD)
     
     user_input = "what is the total points of Mohamed Salah in season 2022-23 gw 4"
