@@ -492,7 +492,7 @@ def models():
         st.markdown("### 🤖 Language Model")
         model_choice = st.selectbox(
             "Choose your AI brain",
-            ["Gemini 2.5 Flash", "Mistral Small", "Cohere"],
+            ["Cohere", "Gemini 2.5 Flash", "Mistral Small"],
             help="Select the AI model to generate intelligent responses"
         )
         
